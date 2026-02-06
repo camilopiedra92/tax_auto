@@ -3,7 +3,7 @@ services:
     build: .
     restart: always
     environment:
-      - PORT=8000
+      - API_PORT=8000
       - ENVIRONMENT=production
       - ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
     healthcheck:

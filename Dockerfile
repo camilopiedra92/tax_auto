@@ -24,7 +24,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV PORT=8000
+ENV API_PORT=8000
 ENV ENVIRONMENT=production
 
 # Run the application

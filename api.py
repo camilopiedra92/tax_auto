@@ -12,7 +12,7 @@ from typing import Optional
 app = FastAPI(title="IBKR Flex Analytics API")
 
 # Enable CORS for frontend development
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -212,7 +212,9 @@ async def get_latest_report(x_user_id: Optional[str] = Header(None)):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
+    # Use API_PORT for internal port binding, defaulted to 8000
+    # Avoids conflict with 'PORT' which Coolify/Heroku might set for external access
+    port = int(os.getenv("API_PORT", 8000))
     # In production (Docker), we don't want reload=True by default
     reload = os.getenv("ENVIRONMENT", "development") == "development"
     uvicorn.run("api:app", host="0.0.0.0", port=port, reload=reload)
