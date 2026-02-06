@@ -44,6 +44,9 @@ Una vez creado el recurso, navega a la pestaña de **Environment Variables** en 
 | :--- | :--- | :--- |
 | `BACKEND_URL` | `https://portfoliobackend.camilo-systems.com` | URL del backend donde el frontend enviará las peticiones API. |
 
+> [!IMPORTANT]
+> **Rebuild Requerido**: Después de cambiar `BACKEND_URL`, debes **forzar un rebuild** del frontend en Coolify (no solo redesplegar). Las variables de Vite se "hornean" en el código JavaScript durante el build.
+
 ## 5. Persistencia (Tus Datos)
 El `docker-compose.yml` incluye un volumen para el backend:
 ```yaml
