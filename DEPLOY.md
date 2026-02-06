@@ -1,6 +1,6 @@
 # Despliegue en Coolify (Guía Detallada)
 
-Esta aplicación está contenedorizada usando Docker y está diseñada para ser desplegada como un proyecto de **Docker Compose** en Coolify.
+Portfolio Hub es una aplicación contenedorizada usando Docker, diseñada para centralizar y gestionar portfolios de inversión. Está optimizada para ser desplegada como un proyecto de **Docker Compose** en Coolify.
 
 ## 1. Requisitos Previos
 - Un servidor Linux con [Coolify](https://coolify.io/) instalado.
@@ -34,14 +34,15 @@ Una vez creado el recurso, navega a la pestaña de **Environment Variables** en 
 ### Servicio de Backend (`backend`)
 | Clave | Valor | Descripción |
 | :--- | :--- | :--- |
-| `ALLOWED_ORIGINS` | `https://tu-dominio.com` | **Crucial**: La URL donde estará el frontend. Permite que el navegador haga peticiones. |
+| `FRONTEND_URL` | `https://portfolio.camilo-systems.com` | **Crucial**: La URL del frontend. Permite peticiones CORS desde el navegador. |
+| `BACKEND_URL` | `https://portfoliobackend.camilo-systems.com` | URL del backend (opcional, para health checks externos). |
 | `ENVIRONMENT` | `production` | Asegura que el servidor corra en modo producción. |
-| `PORT` | `8000` | El puerto interno donde corre la API. |
+| `API_PORT` | `8000` | El puerto interno donde corre la API. |
 
 ### Servicio de Frontend (`frontend`)
 | Clave | Valor | Descripción |
 | :--- | :--- | :--- |
-| `VITE_API_BASE` | `/api` | Indica a la app de React que envíe las peticiones al proxy local de Nginx. |
+| `BACKEND_URL` | `https://portfoliobackend.camilo-systems.com` | URL del backend donde el frontend enviará las peticiones API. |
 
 ## 5. Persistencia (Tus Datos)
 El `docker-compose.yml` incluye un volumen para el backend:
@@ -52,12 +53,28 @@ volumes:
 Coolify crea automáticamente un volumen persistente en el servidor host para que tus reportes de IBKR y configuraciones de usuario **no se pierdan** al redespelgar o reiniciar la app.
 
 ## 6. Arquitectura (Cómo Funciona)
-1. **Punto de Entrada**: El contenedor `frontend` (Nginx) escucha en el puerto 80.
-2. **Archivos Estáticos**: Nginx sirve la aplicación React directamente.
-3. **Proxy de API**: Cualquier petición a `https://tu-dominio.com/api/*` es capturada por Nginx y redirigida internamente al contenedor `backend` en `http://backend:8000/*`.
-4. **CORS**: El backend verifica el encabezado `Origin` contra tu `ALLOWED_ORIGINS` por seguridad.
+
+### Arquitectura con Dominios Separados
+
+Tu aplicación usa **dos dominios separados**:
+- **Frontend**: `https://portfolio.camilo-systems.com` (Nginx + React)
+- **Backend**: `https://portfoliobackend.camilo-systems.com` (FastAPI)
+
+**Flujo de peticiones:**
+1. **Punto de Entrada Frontend**: El navegador carga la app React desde `https://portfolio.camilo-systems.com`
+2. **Archivos Estáticos**: Nginx sirve la aplicación React directamente
+3. **Peticiones API**: El navegador hace peticiones HTTPS directamente a `https://portfoliobackend.camilo-systems.com`
+4. **CORS**: El backend verifica que el encabezado `Origin` sea `https://portfolio.camilo-systems.com` antes de responder
+
+**Importante**: No hay proxy de Nginx en esta configuración. El frontend se comunica directamente con el backend a través de HTTPS.
 
 ## 7. Solución de Problemas
 - **El despliegue falla**: Revisa los **Deploy Logs** en Coolify. Problemas comunes incluyen archivos faltantes o errores de conexión con Git.
-- **Frontend no conecta con Backend**: Verifica que `VITE_API_BASE` sea `/api` y que `ALLOWED_ORIGINS` coincida perfectamente con tu dominio (incluyendo `https://`).
+- **Frontend funciona pero Backend no responde**: 
+  - Verifica que `FRONTEND_URL` esté configurado correctamente en las variables de entorno del servicio `backend`
+  - Asegúrate de que el `docker-compose.yml` tenga `expose: - 8000` en el servicio backend
+  - Revisa los logs del contenedor backend en Coolify para ver si hay errores de inicio
+  - Prueba el health check: `curl https://tu-dominio.com/api/health` (debe retornar `{"status":"healthy"}`)
+- **Frontend no conecta con Backend**: Verifica que `VITE_API_BASE` sea `/api` y que `FRONTEND_URL` coincida perfectamente con tu dominio (incluyendo `https://`).
 - **Datos perdidos tras reiniciar**: Revisa la pestaña **Storage** en Coolify para asegurar que el volumen esté correctamente montado.
+

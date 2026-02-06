@@ -2,10 +2,12 @@ services:
   backend:
     build: .
     restart: always
+    expose:
+      - 8000
     environment:
       - API_PORT=8000
       - ENVIRONMENT=production
-      - ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
+      - ALLOWED_ORIGINS=${FRONTEND_URL:-http://localhost,http://127.0.0.1},${BACKEND_URL:-}
     healthcheck:
       test: [ "CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1" ]
       interval: 30s
@@ -22,12 +24,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_BASE=/api
+        - VITE_API_BASE=${BACKEND_URL:-http://localhost:8000}
     restart: always
     expose:
       - 80
     environment:
-      - VITE_API_BASE=/api
+      - VITE_API_BASE=${BACKEND_URL:-http://localhost:8000}
     depends_on:
       - backend
     networks:
