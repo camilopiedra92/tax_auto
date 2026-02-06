@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+*.log
+
+# Node.js
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Application Data / Secrets
+config.json
+sync_state.json
+*.xml
+users/
+data/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Docker
+.dockerignore
