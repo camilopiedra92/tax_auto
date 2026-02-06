@@ -673,3 +673,43 @@ body[data-theme="light"] .glass-select option {
   z-index: -1;
   filter: blur(8px);
 }
+/* Ticker Logo Styles */
+.ticker-logo-container {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.ticker-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 4px;
+}
+
+.ticker-fallback-icon {
+  display: none;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+.ticker-logo-container.fallback .ticker-fallback-icon {
+  display: block;
+}
+
+.ticker-logo-container.fallback {
+  background: rgba(56, 189, 248, 0.1);
+}
+
+body[data-theme="light"] .ticker-logo-container {
+  background: rgba(255, 255, 255, 0.8);
+}

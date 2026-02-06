@@ -852,7 +852,23 @@ function App() {
                               transition={{ delay: idx * 0.03 }}
                               whileHover={{ backgroundColor: 'rgba(255,255,255,0.02)' }}
                             >
-                              <td style={{ fontWeight: 600 }}>{pos['@symbol']}</td>
+                              <td style={{ fontWeight: 600 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                  <div className="ticker-logo-container">
+                                    <img
+                                      src={`https://img.logo.dev/ticker/${(pos['@symbol'] || '').split(' ')[0].toLowerCase()}?token=${import.meta.env.VITE_LOGO_DEV_TOKEN}`}
+                                      alt={pos['@symbol']}
+                                      className="ticker-logo"
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.parentElement.classList.add('fallback');
+                                      }}
+                                    />
+                                    <span className="ticker-fallback-icon">{pos['@symbol']?.[0]}</span>
+                                  </div>
+                                  {pos['@symbol']}
+                                </div>
+                              </td>
                               <td style={{ color: 'var(--text-dim)' }}>{pos['@assetCategory']}</td>
                               <td>{parseFloat(pos['@position']).toLocaleString()}</td>
                               <td style={{ color: 'var(--text-dim)' }}>{pos['@currency']}</td>
