@@ -552,7 +552,7 @@ function App() {
           </div>
 
           <div className="distribution-grid">
-            <div style={{ height: '280px', position: 'relative' }}>
+            <div style={{ height: '280px', width: '100%', minWidth: 0, position: 'relative' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <RPieChart>
                   <Pie
