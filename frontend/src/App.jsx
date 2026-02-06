@@ -88,6 +88,7 @@ function App() {
   const [isGrouped, setIsGrouped] = useState(false);
   const [user, setUser] = useState(() => localStorage.getItem('ibkr_user_id'));
   const [token, setToken] = useState(() => localStorage.getItem('ibkr_token'));
+  const [theme, setTheme] = useState('dark');
 
   const handleLogin = (userId, accessToken) => {
     localStorage.setItem('ibkr_user_id', userId);
@@ -114,6 +115,29 @@ function App() {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  // Fetch and apply user theme preference
+  useEffect(() => {
+    const fetchTheme = async () => {
+      if (user && token) {
+        try {
+          const config = { headers: { 'Authorization': `Bearer ${token}` } };
+          const response = await axios.get(`${API_BASE}/user/preferences`, config);
+          if (response.data.theme) {
+            setTheme(response.data.theme);
+          }
+        } catch (err) {
+          console.error('Error fetching theme:', err);
+        }
+      }
+    };
+    fetchTheme();
+  }, [user, token]);
+
+  // Apply theme to body element
+  useEffect(() => {
+    document.body.setAttribute('data-theme', theme);
+  }, [theme]);
 
   const formatIBKRDate = (timestamp) => {
     if (!timestamp) return t('not_available');
@@ -387,6 +411,7 @@ function App() {
         onSaveSuccess={() => fetchData()}
         userId={user}
         token={token}
+        onThemeChange={setTheme}
       />
 
       {error && (

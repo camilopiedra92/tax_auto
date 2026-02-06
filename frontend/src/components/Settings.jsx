@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
-const Settings = ({ isOpen, onClose, onSaveSuccess, userId, token: authToken }) => {
+const Settings = ({ isOpen, onClose, onSaveSuccess, userId, token: authToken, onThemeChange }) => {
     const { t, i18n } = useTranslation();
     const [activeTab, setActiveTab] = useState('profile');
     const [loading, setLoading] = useState(false);
@@ -128,6 +128,11 @@ const Settings = ({ isOpen, onClose, onSaveSuccess, userId, token: authToken }) 
             // Update language if changed
             if (preferences.language !== i18n.language) {
                 i18n.changeLanguage(preferences.language);
+            }
+
+            // Update theme if callback provided
+            if (onThemeChange && preferences.theme) {
+                onThemeChange(preferences.theme);
             }
 
             setSuccess(true);
