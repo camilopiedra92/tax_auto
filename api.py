@@ -31,6 +31,10 @@ def get_user_dir(user_id: str):
 async def root():
     return {"message": "IBKR Flex Analytics API is running"}
 
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
 @app.get("/config")
 async def get_account_config(x_user_id: Optional[str] = Header(None)):
     if not x_user_id:
