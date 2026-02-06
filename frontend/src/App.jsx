@@ -300,7 +300,7 @@ function App() {
             borderRadius: '1rem',
             border: '1px solid rgba(56, 189, 248, 0.2)'
           }}>
-            <LayoutDashboard size={28} color="var(--accent-primary)" />
+            <img src="/icon.svg" alt="Logo" style={{ width: '32px', height: '32px' }} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             <h1 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.02em' }}>{t('app_title')}</h1>

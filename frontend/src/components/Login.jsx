@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { User, Lock, ArrowRight, LayoutDashboard, UserPlus, LogIn } from 'lucide-react';
+import { User, Lock, ArrowRight, UserPlus, LogIn } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
@@ -110,7 +110,7 @@ const Login = ({ onLogin }) => {
                     transition={{ delay: 0.3, type: 'spring', stiffness: 200, damping: 15 }}
                     className="login-icon-container"
                 >
-                    <LayoutDashboard size={36} color="var(--accent-primary)" />
+                    <img src="/icon.svg" alt="Logo" style={{ width: '48px', height: '48px' }} />
                 </motion.div>
 
                 <motion.div
