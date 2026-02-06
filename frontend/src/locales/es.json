@@ -98,5 +98,19 @@
     "light_theme": "Claro",
     "default_currency": "Moneda Predeterminada",
     "save_preferences": "Guardar Preferencias",
-    "preferences_saved": "Preferencias guardadas exitosamente"
+    "preferences_saved": "Preferencias guardadas exitosamente",
+    "by_asset_class": "Por Clase de Activo",
+    "by_currency": "Por Moneda",
+    "by_symbol": "Por Posición",
+    "others": "Otros",
+    "portfolio_insights": "Insights del Portafolio",
+    "concentration_top_3": "Concentración Top 3",
+    "concentration_msg": "Tus 3 principales posiciones representan el {{percent}}% de tu portafolio.",
+    "market_exposure": "Exposición de Mercado",
+    "exposure_msg": "Tu mayor exposición es en {{type}} ({{percent}}%).",
+    "diversification_score": "Diversificación",
+    "diversification_low": "Baja",
+    "diversification_med": "Media",
+    "diversification_high": "Alta",
+    "clear_filter": "Limpiar Filtro"
 }

@@ -98,5 +98,19 @@
     "light_theme": "Light",
     "default_currency": "Default Currency",
     "save_preferences": "Save Preferences",
-    "preferences_saved": "Preferences saved successfully"
+    "preferences_saved": "Preferences saved successfully",
+    "by_asset_class": "By Asset Class",
+    "by_currency": "By Currency",
+    "by_symbol": "By Position",
+    "others": "Others",
+    "portfolio_insights": "Portfolio Insights",
+    "concentration_top_3": "Top 3 Concentration",
+    "concentration_msg": "Your top 3 positions represent {{percent}}% of your portfolio.",
+    "market_exposure": "Market Exposure",
+    "exposure_msg": "Highest exposure is in {{type}} ({{percent}}%).",
+    "diversification_score": "Diversification",
+    "diversification_low": "Low",
+    "diversification_med": "Medium",
+    "diversification_high": "High",
+    "clear_filter": "Clear Filter"
 }

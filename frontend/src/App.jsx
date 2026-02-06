@@ -86,6 +86,8 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isGrouped, setIsGrouped] = useState(false);
+  const [distributionMode, setDistributionMode] = useState('category'); // 'category', 'currency', 'symbol'
+  const [selectedFilter, setSelectedFilter] = useState(null);
   const [user, setUser] = useState(() => localStorage.getItem('ibkr_user_id'));
   const [token, setToken] = useState(() => localStorage.getItem('ibkr_token'));
   const [theme, setTheme] = useState('dark');
@@ -252,6 +254,24 @@ function App() {
       );
     }
 
+    if (selectedFilter) {
+      result = result.filter(pos => {
+        if (selectedFilter.type === 'category') return pos['@assetCategory'] === selectedFilter.value;
+        if (selectedFilter.type === 'currency') return pos['@currency'] === selectedFilter.value;
+        if (selectedFilter.type === 'symbol') {
+          if (selectedFilter.value === t('others')) {
+            // Find what "Others" includes based on the same threshold used in chartData
+            const otherSymbols = openPositions
+              .filter(p => (Math.abs(parseFloat(p['@percentOfNAV'])) || 0) < 3)
+              .map(p => p['@symbol']);
+            return otherSymbols.includes(pos['@symbol']);
+          }
+          return pos['@symbol'] === selectedFilter.value;
+        }
+        return true;
+      });
+    }
+
     if (!sortConfig.key && !isGrouped) return result;
 
     return [...result].sort((a, b) => {
@@ -294,14 +314,90 @@ function App() {
   const startIndex = (currentPage - 1) * rowsPerPage;
   const paginatedPositions = sortedPositions.slice(startIndex, startIndex + rowsPerPage);
 
-  const topPositionsForChart = [...openPositions].sort((a, b) => {
-    return Math.abs(parseFloat(b['@percentOfNAV']) || 0) - Math.abs(parseFloat(a['@percentOfNAV']) || 0);
-  });
+  const getChartData = () => {
+    if (!openPositions.length) return [];
 
-  const chartData = topPositionsForChart.map(pos => ({
-    name: pos['@symbol'],
-    value: Math.abs(parseFloat(pos['@percentOfNAV']) || 0)
-  }));
+    if (distributionMode === 'category') {
+      const categories = {};
+      openPositions.forEach(pos => {
+        const cat = (pos['@assetCategory'] || 'Other').trim();
+        const val = Math.abs(parseFloat(pos['@percentOfNAV']) || 0);
+        categories[cat] = (categories[cat] || 0) + val;
+      });
+      return Object.entries(categories)
+        .sort((a, b) => b[1] - a[1]) // Sort by value
+        .map(([name, value]) => ({ name, value, type: 'category' }));
+    }
+
+    if (distributionMode === 'currency') {
+      const currencies = {};
+      openPositions.forEach(pos => {
+        const curr = (pos['@currency'] || 'USD').trim();
+        const val = Math.abs(parseFloat(pos['@percentOfNAV']) || 0);
+        currencies[curr] = (currencies[curr] || 0) + val;
+      });
+      return Object.entries(currencies)
+        .sort((a, b) => b[1] - a[1]) // Sort by value
+        .map(([name, value]) => ({ name, value, type: 'currency' }));
+    }
+
+    // Default: symbol (position)
+    const sorted = [...openPositions].sort((a, b) =>
+      (Math.abs(parseFloat(b['@percentOfNAV'])) || 0) - (Math.abs(parseFloat(a['@percentOfNAV'])) || 0)
+    );
+
+    const mainPositions = [];
+    let othersValue = 0;
+
+    sorted.forEach(pos => {
+      const val = Math.abs(parseFloat(pos['@percentOfNAV']) || 0);
+      if (val >= 3) {
+        mainPositions.push({ name: pos['@symbol'], value: val, type: 'symbol' });
+      } else {
+        othersValue += val;
+      }
+    });
+
+    if (othersValue > 0) {
+      mainPositions.push({ name: t('others'), value: othersValue, type: 'symbol', isOthers: true });
+    }
+
+    return mainPositions;
+  };
+
+  const chartData = getChartData();
+
+  const getInsights = () => {
+    if (!openPositions.length) return [];
+
+    // Concentration
+    const sorted = [...openPositions].sort((a, b) =>
+      (Math.abs(parseFloat(b['@percentOfNAV'])) || 0) - (Math.abs(parseFloat(a['@percentOfNAV'])) || 0)
+    );
+    const top3 = sorted.slice(0, 3).reduce((sum, p) => sum + (Math.abs(parseFloat(p['@percentOfNAV'])) || 0), 0);
+
+    // Exposure
+    const categories = {};
+    openPositions.forEach(pos => {
+      const cat = pos['@assetCategory'] || 'Other';
+      const val = Math.abs(parseFloat(pos['@percentOfNAV']) || 0);
+      categories[cat] = (categories[cat] || 0) + val;
+    });
+    const mainExposure = Object.entries(categories).sort((a, b) => b[1] - a[1])[0];
+
+    // Diversification
+    let score = t('diversification_low');
+    if (openPositions.length > 10 && Object.keys(categories).length > 2) score = t('diversification_high');
+    else if (openPositions.length > 5) score = t('diversification_med');
+
+    return [
+      { title: t('concentration_top_3'), value: `${top3.toFixed(1)}%`, msg: t('concentration_msg', { percent: top3.toFixed(1) }), icon: <Layers size={16} /> },
+      { title: t('market_exposure'), value: mainExposure ? mainExposure[0] : 'N/A', msg: t('exposure_msg', { type: mainExposure ? mainExposure[0] : 'N/A', percent: mainExposure ? mainExposure[1].toFixed(1) : '0' }), icon: <TrendingUp size={16} /> },
+      { title: t('diversification_score'), value: score, msg: '', icon: <PieChart size={16} /> }
+    ];
+  };
+
+  const insights = getInsights();
 
   const COLORS = [
     '#38bdf8', '#818cf8', '#c084fc', '#f472b6', '#fb7185',
@@ -541,167 +637,151 @@ function App() {
 
       <div className="main-content">
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>{t('distribution')}</h2>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{t('portfolio_breakdown')}</span>
+              <div style={{ display: 'flex', gap: '0.4rem', background: 'rgba(255,255,255,0.03)', padding: '0.25rem', borderRadius: '0.75rem', border: '1px solid var(--glass-border)' }}>
+                {['category', 'currency', 'symbol'].map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setDistributionMode(mode)}
+                    className={`toggle-tab ${distributionMode === mode ? 'active' : ''}`}
+                    style={{ border: 'none', padding: '0.4rem 0.75rem', fontSize: '0.75rem' }}
+                  >
+                    {t(`by_${mode === 'category' ? 'asset_class' : mode === 'currency' ? 'currency' : 'symbol'}`)}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div style={{ padding: '0.4rem', borderRadius: '0.5rem', background: 'rgba(255,255,255,0.03)' }}>
-              <PieChart size={18} color="var(--accent-primary)" />
+            <div style={{ padding: '0.5rem', borderRadius: '0.75rem', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+              <PieChart size={20} color="var(--accent-primary)" />
             </div>
           </div>
 
-          <div className="distribution-grid">
-            <div style={{ minHeight: '280px', width: '100%', minWidth: 0, position: 'relative' }}>
-              <ResponsiveContainer width="100%" height={280} minWidth={0} minHeight={0}>
-                <RPieChart>
-                  <Pie
-                    activeIndex={activeIndex}
-                    activeShape={renderActiveShape}
-                    data={chartData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={75}
-                    outerRadius={100}
-                    paddingAngle={4}
-                    dataKey="value"
-                    onMouseEnter={onPieEnter}
-                    onMouseLeave={() => setActiveIndex(null)}
-                  >
-                    {chartData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                        stroke="rgba(0,0,0,0.2)"
-                        strokeWidth={2}
-                      />
-                    ))}
-                  </Pie>
-                </RPieChart>
-              </ResponsiveContainer>
+          <div className="distribution-content-wrapper">
+            <div className="distribution-chart-section">
+              <div style={{ minHeight: '300px', width: '100%', position: 'relative', display: 'flex', justifyContent: 'center' }}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <RPieChart>
+                    <Pie
+                      activeIndex={activeIndex}
+                      activeShape={renderActiveShape}
+                      data={chartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={80}
+                      outerRadius={110}
+                      paddingAngle={chartData.length > 1 ? 4 : 0}
+                      dataKey="value"
+                      onMouseEnter={onPieEnter}
+                      onMouseLeave={() => setActiveIndex(null)}
+                      onClick={(data) => {
+                        if (data && data.name) {
+                          if (selectedFilter?.value === data.name) {
+                            setSelectedFilter(null);
+                          } else {
+                            setSelectedFilter({ type: distributionMode, value: data.name });
+                          }
+                        }
+                      }}
+                      style={{ cursor: 'pointer', outline: 'none' }}
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                          stroke="rgba(0,0,0,0.3)"
+                          strokeWidth={2}
+                        />
+                      ))}
+                    </Pie>
+                  </RPieChart>
+                </ResponsiveContainer>
 
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                textAlign: 'center',
-                pointerEvents: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                width: '120px',
-                zIndex: 10
-              }}>
-                <span style={{
-                  fontSize: '0.8rem',
-                  color: activeIndex !== null ? 'var(--accent-primary)' : 'var(--text-dim)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
-                  fontWeight: 700,
-                  transition: 'all 0.3s ease',
-                  marginBottom: '2px'
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  textAlign: 'center',
+                  pointerEvents: 'none',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  width: '140px',
+                  zIndex: 10
                 }}>
-                  {activeIndex !== null ? chartData[activeIndex]?.name : t('total')}
-                </span>
-                <span style={{
-                  fontSize: '1.75rem',
-                  fontWeight: 800,
-                  color: 'var(--text-main)',
-                  lineHeight: 1,
-                  transition: 'all 0.3s ease'
-                }}>
-                  {activeIndex !== null ? `${chartData[activeIndex]?.value.toFixed(1)}%` : '100%'}
-                </span>
-                {activeIndex !== null && (
-                  <motion.span
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    style={{
-                      fontSize: '0.7rem',
-                      color: 'var(--text-dim)',
-                      marginTop: '4px',
-                      fontWeight: 500
-                    }}
-                  >
-                    {t('percent_portfolio')}
-                  </motion.span>
-                )}
+                  <span style={{
+                    fontSize: '0.75rem',
+                    color: activeIndex !== null ? 'var(--accent-primary)' : 'var(--text-dim)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                    fontWeight: 700,
+                    transition: 'all 0.3s ease',
+                    marginBottom: '4px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
+                    {activeIndex !== null ? chartData[activeIndex]?.name : t('total')}
+                  </span>
+                  <span style={{
+                    fontSize: '1.85rem',
+                    fontWeight: 800,
+                    color: 'var(--text-main)',
+                    lineHeight: 1,
+                    transition: 'all 0.3s ease'
+                  }}>
+                    {activeIndex !== null ? `${chartData[activeIndex]?.value.toFixed(1)}%` : '100%'}
+                  </span>
+                  {activeIndex !== null && (
+                    <motion.span
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      style={{ fontSize: '0.65rem', color: 'var(--text-dim)', marginTop: '4px', fontWeight: 500 }}
+                    >
+                      {t('percent_portfolio')}
+                    </motion.span>
+                  )}
+                </div>
               </div>
+
+              {/* Minimal Legend for multi-value modes */}
+              {distributionMode !== 'symbol' && chartData.length > 1 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', justifyContent: 'center', marginTop: '1rem' }}>
+                  {chartData.map((item, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: activeIndex === i ? 'var(--text-main)' : 'var(--text-dim)', transition: 'all 0.2s' }}>
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: COLORS[i % COLORS.length] }} />
+                      <span>{item.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <div className="legend-container" style={{
-              maxHeight: '300px',
-              overflowY: 'auto',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-              gap: '0.5rem',
-              paddingRight: '0.5rem',
-              width: '100%'
-            }}>
-              {chartData.map((item, i) => (
-                <motion.div
-                  key={i}
-                  onMouseEnter={() => setActiveIndex(i)}
-                  onMouseLeave={() => setActiveIndex(null)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0.5rem 0.75rem',
-                    borderRadius: '0.75rem',
-                    background: activeIndex === i ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.02)',
-                    border: '1px solid',
-                    borderColor: activeIndex === i ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.03)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                    position: 'relative',
-                    overflow: 'hidden'
-                  }}
-                  whileHover={{ x: 3 }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', zIndex: 1 }}>
-                    <div style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      background: COLORS[i % COLORS.length],
-                      boxShadow: `0 0 8px ${COLORS[i % COLORS.length]}80`
-                    }} />
-                    <span style={{
-                      fontSize: '0.8rem',
-                      fontWeight: activeIndex === i ? 700 : 500,
-                      color: activeIndex === i ? 'var(--text-main)' : 'var(--text-dim)',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      maxWidth: '60px'
-                    }}>
-                      {item.name}
-                    </span>
-                  </div>
-                  <span style={{
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    color: activeIndex === i ? 'var(--accent-primary)' : 'var(--text-main)',
-                    zIndex: 1
-                  }}>
-                    {item.value.toFixed(1)}%
-                  </span>
-                  {activeIndex === i && (
-                    <motion.div
-                      layoutId="legend-bg"
-                      style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: 0,
-                        height: '100%',
-                        width: '3px',
-                        background: COLORS[i % COLORS.length]
-                      }}
-                    />
-                  )}
-                </motion.div>
-              ))}
+            <div className="insights-panel">
+              <h3 style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '1.25rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                {t('portfolio_insights')}
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {insights.map((insight, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.1 }}
+                    className="insight-card"
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+                        {insight.icon}
+                        {insight.title}
+                      </span>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--accent-primary)' }}>{insight.value}</span>
+                    </div>
+                    {insight.msg && <p style={{ fontSize: '0.75rem', color: 'var(--text-main)', margin: 0, opacity: 0.8, lineHeight: 1.5 }}>{insight.msg}</p>}
+                  </motion.div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -710,6 +790,28 @@ function App() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>{t('open_positions')}</h2>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              {selectedFilter && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  onClick={() => setSelectedFilter(null)}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.2)',
+                    color: '#f87171',
+                    padding: '0.4rem 0.8rem',
+                    borderRadius: '0.5rem',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  {t('clear_filter')} ({selectedFilter.value})
+                </motion.button>
+              )}
               <div className="glass-input-container" style={{ width: '200px' }}>
                 <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', zIndex: 2 }} />
                 <input

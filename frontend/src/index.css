@@ -389,21 +389,92 @@ body[data-theme="light"] .glass-select option {
   color: var(--accent-primary);
 }
 
-/* Distribution Grid */
-/* Distribution Grid */
-.distribution-grid {
+/* Distribution Redesign Layout */
+.distribution-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .distribution-content-wrapper {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+}
+
+.distribution-chart-section {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
   align-items: center;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 1.5rem;
+  border-radius: 1.5rem;
+  border: 1px solid var(--glass-border);
 }
 
-@media (min-width: 1024px) {
-  .distribution-grid {
-    display: grid;
-    grid-template-columns: 300px 1fr;
-    gap: 2.5rem;
-  }
+.insights-panel {
+  flex: 0 0 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.toggle-tab {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  color: var(--text-dim);
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toggle-tab:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+  transform: translateY(-1px);
+}
+
+.toggle-tab.active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+}
+
+.insight-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 1.25rem;
+  padding: 1.25rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.insight-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateX(8px);
+  border-color: rgba(56, 189, 248, 0.3);
+  box-shadow: -4px 0 0 var(--accent-primary);
+}
+
+.insight-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle at top right, rgba(56, 189, 248, 0.05), transparent 70%);
+  pointer-events: none;
 }
 
 .legend-container::-webkit-scrollbar {
@@ -673,6 +744,7 @@ body[data-theme="light"] .glass-select option {
   z-index: -1;
   filter: blur(8px);
 }
+
 /* Ticker Logo Styles */
 .ticker-logo-container {
   width: 32px;
