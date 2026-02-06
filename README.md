@@ -1,19 +1,20 @@
-# Tax Auto - IBKR Portfolio Tracker
+# Portfolio Hub - Plataforma de Consolidación de Inversiones
 
-Una aplicación para rastrear y analizar portafolios de Interactive Brokers (IBKR) de forma automatizada.
+Una aplicación para centralizar y analizar tus portfolios de inversión en un solo lugar. Actualmente soporta Interactive Brokers (IBKR) con planes de expandirse a otros brokers y plataformas.
 
 ## Características
 
-- **Análisis de Reportes XML**: Procesa archivos Flex Query de IBKR.
-- **Dashboard en Tiempo Real**: Visualización de posiciones, PnL y distribución de activos.
+- **Consolidación de Portfolios**: Visualiza todas tus inversiones en un dashboard unificado.
+- **Análisis en Tiempo Real**: Seguimiento de posiciones, PnL y distribución de activos.
+- **Soporte Multi-Broker**: Actualmente IBKR, con arquitectura preparada para expansión.
 - **Multilenguaje**: Soporte para Español e Inglés.
 - **Preparado para Docker**: Despliegue sencillo mediante Docker Compose.
 
 ## Estructura del Proyecto
 
-- `/frontend`: Aplicación React + Vite + Tailwind.
+- `/frontend`: Aplicación React + Vite con diseño moderno.
 - `/api.py`: Backend FastAPI que sirve los datos procesados.
-- `/parser.py`: Lógica de procesamiento de reportes XML de IBKR.
+- `/parser.py`: Lógica de procesamiento de reportes (actualmente IBKR Flex Query XML).
 - `Dockerfile` & `docker-compose.yml`: Configuraciones para contenedores.
 
 ## Requisitos Previos
