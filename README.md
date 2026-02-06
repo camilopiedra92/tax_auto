@@ -36,4 +36,6 @@ Una aplicación para rastrear y analizar portafolios de Interactive Brokers (IBK
 
 ## Despliegue con Coolify
 
-Este repositorio está configurado para desplegarse automáticamente en Coolify detectando el archivo `docker-compose.yml`. Recuerda configurar las variables de entorno necesarias en el panel de Coolify.
+Este repositorio está configurado para desplegarse automáticamente en Coolify detectando el archivo `docker-compose.yml`. 
+
+Para una guía paso a paso detallada sobre cómo configurar las fuentes de Git, volúmenes persistentes y variables de entorno, consulta nuestra **[Guía de Despliegue (DEPLOY.md)](./DEPLOY.md)**.
