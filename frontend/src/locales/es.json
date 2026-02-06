@@ -59,5 +59,18 @@
     "logout": "Cerrar Sesión",
     "login_footer_text": "Acceso seguro a su panel de impuestos",
     "search_positions": "Buscar símbolo...",
-    "group_by_type": "Agrupar por Tipo"
+    "group_by_type": "Agrupar por Tipo",
+    "password": "Contraseña",
+    "password_placeholder": "Ingresa tu contraseña",
+    "login": "Iniciar Sesión",
+    "register": "Registrarse",
+    "create_account": "Crear Cuenta",
+    "sign_in": "Entrar",
+    "already_have_account": "¿Ya tienes cuenta? Inicia sesión",
+    "need_account": "¿Necesitas cuenta? Regístrate",
+    "invalid_credentials": "Usuario o contraseña inválidos",
+    "passwords_dont_match": "Las contraseñas no coinciden",
+    "registration_success": "¡Registro exitoso! Ahora puedes iniciar sesión.",
+    "confirm_password": "Confirmar Contraseña",
+    "confirm_password_placeholder": "Confirma tu contraseña"
 }

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
-const Settings = ({ isOpen, onClose, onSaveSuccess, userId }) => {
+const Settings = ({ isOpen, onClose, onSaveSuccess, userId, token: authToken }) => {
     const { t } = useTranslation();
     const [token, setToken] = useState('');
     const [queryId, setQueryId] = useState('');
@@ -27,12 +27,18 @@ const Settings = ({ isOpen, onClose, onSaveSuccess, userId }) => {
         setError(null);
         try {
             const response = await axios.get(`${API_BASE}/config`, {
-                headers: { 'X-User-ID': userId }
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                }
             });
             setQueryId(response.data.query_id);
             setCurrentMaskedToken(response.data.token_masked);
         } catch (err) {
-            setError(t('error_connection'));
+            if (err.response?.data?.detail) {
+                setError(err.response.data.detail);
+            } else {
+                setError(t('error_connection'));
+            }
         } finally {
             setLoading(false);
         }
@@ -48,13 +54,19 @@ const Settings = ({ isOpen, onClose, onSaveSuccess, userId }) => {
                 token: token || undefined, // If empty, backend might need to handle it or we use current
                 query_id: queryId
             }, {
-                headers: { 'X-User-ID': userId }
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                }
             });
             setSuccess(true);
             setTimeout(() => setSuccess(false), 3000);
             if (onSaveSuccess) onSaveSuccess();
         } catch (err) {
-            setError(t('config_error'));
+            if (err.response?.data?.detail) {
+                setError(err.response.data.detail);
+            } else {
+                setError(t('config_error'));
+            }
         } finally {
             setSaving(false);
         }

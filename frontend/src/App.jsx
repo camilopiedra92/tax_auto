@@ -87,15 +87,20 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isGrouped, setIsGrouped] = useState(false);
   const [user, setUser] = useState(() => localStorage.getItem('ibkr_user_id'));
+  const [token, setToken] = useState(() => localStorage.getItem('ibkr_token'));
 
-  const handleLogin = (userId) => {
+  const handleLogin = (userId, accessToken) => {
     localStorage.setItem('ibkr_user_id', userId);
+    localStorage.setItem('ibkr_token', accessToken);
     setUser(userId);
+    setToken(accessToken);
   };
 
   const handleLogout = () => {
     localStorage.removeItem('ibkr_user_id');
+    localStorage.removeItem('ibkr_token');
     setUser(null);
+    setToken(null);
     setData(null);
     setSummary(null);
   };
@@ -158,7 +163,7 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const config = { headers: { 'X-User-ID': user } };
+      const config = { headers: { 'Authorization': `Bearer ${token}` } };
       const response = isSync
         ? await axios.post(`${API_BASE}/sync`, {}, config)
         : await axios.get(`${API_BASE}/latest`, config);
@@ -171,17 +176,26 @@ function App() {
         setError(response.data.message);
       }
     } catch (err) {
-      setError(t('error_connection'));
+      if (err.response?.status === 401) {
+        handleLogout();
+        return;
+      }
+      if (err.response?.data?.detail) {
+        setError(err.response.data.detail);
+      } else {
+        console.error("Sync error:", err);
+        setError(t('error_connection'));
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (user) {
+    if (user && token) {
       fetchData();
     }
-  }, [user]);
+  }, [user, token]);
 
   // Reset to first page when sorting or rows per page change
   useEffect(() => {
@@ -272,7 +286,7 @@ function App() {
     '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6'
   ];
 
-  if (!user) {
+  if (!user || !token) {
     return <Login onLogin={handleLogin} />;
   }
 
@@ -372,6 +386,7 @@ function App() {
         onClose={() => setIsSettingsOpen(false)}
         onSaveSuccess={() => fetchData()}
         userId={user}
+        token={token}
       />
 
       {error && (
@@ -799,46 +814,49 @@ function App() {
                         return (
                           <React.Fragment key={`${pos['@symbol']}-${idx}`}>
                             {showHeader && (
-                              <tr className="group-header">
-                                <td colSpan="10" style={{
-                                  background: 'rgba(56, 189, 248, 0.05)',
-                                  color: 'var(--accent-primary)',
-                                  fontWeight: 700,
-                                  padding: '0.75rem 1.25rem',
-                                  fontSize: '0.8rem',
-                                  textTransform: 'uppercase',
-                                  letterSpacing: '0.05em',
-                                  borderBottom: '1px solid rgba(56, 189, 248, 0.1)'
-                                }}>
+                              <tr className="group-header-row">
+                                <td colSpan={10} style={{ padding: '0.8rem 1rem', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--accent-primary)', fontWeight: 700, fontSize: '0.9rem' }}>
                                   {pos['@assetCategory']}
                                 </td>
                               </tr>
                             )}
                             <motion.tr
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              transition={{ delay: idx * 0.05 }}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -10 }}
+                              transition={{ delay: idx * 0.03 }}
+                              whileHover={{ backgroundColor: 'rgba(255,255,255,0.02)' }}
                             >
-                              <td style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                  <span>{pos['@symbol']}</span>
-                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 400 }}>{pos['@description']}</span>
+                              <td style={{ fontWeight: 600 }}>{pos['@symbol']}</td>
+                              <td style={{ color: 'var(--text-dim)' }}>{pos['@assetCategory']}</td>
+                              <td>{parseFloat(pos['@position']).toLocaleString()}</td>
+                              <td style={{ color: 'var(--text-dim)' }}>{pos['@currency']}</td>
+                              <td>{formatCurrency(pos['@openPrice'] || 0)}</td>
+                              <td>{formatCurrency(pos['@markPrice'] || 0)}</td>
+                              <td style={{ fontWeight: 600 }}>{formatCurrency(pos['@positionValue'] || 0)}</td>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <div style={{
+                                    width: '60px',
+                                    height: '4px',
+                                    background: 'rgba(255,255,255,0.1)',
+                                    borderRadius: '2px',
+                                    overflow: 'hidden'
+                                  }}>
+                                    <div style={{
+                                      width: `${Math.min(100, Math.abs(parseFloat(pos['@percentOfNAV']) || 0))}%`,
+                                      height: '100%',
+                                      background: 'var(--accent-primary)'
+                                    }} />
+                                  </div>
+                                  {parseFloat(pos['@percentOfNAV'] || 0).toFixed(2)}%
                                 </div>
                               </td>
-                              <td>{pos['@assetCategory']}</td>
-                              <td>{parseFloat(pos['@position']).toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
-                              <td>{pos['@currency']}</td>
-                              <td style={{ fontWeight: 500 }}>${parseFloat(pos['@openPrice']).toFixed(2)}</td>
-                              <td style={{ fontWeight: 500 }}>${parseFloat(pos['@markPrice']).toFixed(2)}</td>
-                              <td style={{ fontWeight: 600 }}>${parseFloat(pos['@positionValue']).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                              <td>{pos['@percentOfNAV']}%</td>
                               <td className={(parseFloat(pos['@fifoPnlUnrealized']) || 0) >= 0 ? 'positive' : 'negative'}>
-                                {(parseFloat(pos['@fifoPnlUnrealized']) || 0) >= 0 ? '+' : ''}
-                                ${formatCurrency(pos['@fifoPnlUnrealized'])}
+                                {formatCurrency(pos['@fifoPnlUnrealized'] || 0)}
                               </td>
                               <td className={(parseFloat(pos['realized_pnl']) || 0) >= 0 ? 'positive' : 'negative'}>
-                                {(parseFloat(pos['realized_pnl']) || 0) >= 0 ? '+' : ''}
-                                ${formatCurrency(pos['realized_pnl'])}
+                                {formatCurrency(pos['realized_pnl'] || 0)}
                               </td>
                             </motion.tr>
                           </React.Fragment>
@@ -846,7 +864,7 @@ function App() {
                       })
                     ) : (
                       <tr>
-                        <td colSpan="10" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-dim)' }}>
+                        <td colSpan="10" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-dim)' }}>
                           {t('no_positions')}
                         </td>
                       </tr>
@@ -856,71 +874,44 @@ function App() {
               </table>
             </div>
           </div>
-
-          {/* Pagination Controls */}
-          {sortedPositions.length > 0 && (
-            <div className="pagination-container">
-              <div className="pagination-info">
-                {t('showing_rows')} {startIndex + 1}-{Math.min(startIndex + rowsPerPage, sortedPositions.length)} {t('of')} {sortedPositions.length}
+          <div className="pagination-container">
+            <span className="pagination-info">
+              {t('showing_rows')} {startIndex + 1}-{Math.min(startIndex + rowsPerPage, sortedPositions.length)} {t('of')} {sortedPositions.length}
+            </span>
+            <div className="pagination-controls">
+              <div className="rows-selector">
+                <span>{t('rows_per_page')}</span>
+                <select
+                  value={rowsPerPage}
+                  onChange={(e) => setRowsPerPage(Number(e.target.value))}
+                  className="glass-select"
+                >
+                  {[5, 10, 20, 50, 100].map(val => (
+                    <option key={val} value={val}>{val}</option>
+                  ))}
+                </select>
               </div>
-
-              <div className="pagination-controls">
-                <div className="rows-selector">
-                  <span>{t('rows_per_page')}</span>
-                  <select
-                    value={rowsPerPage}
-                    onChange={(e) => setRowsPerPage(Number(e.target.value))}
-                    className="glass-select"
-                  >
-                    {[10, 25, 50, 100].map(val => (
-                      <option key={val} value={val}>{val}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="page-navigation">
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
-                    className="nav-button"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-
-                  <div className="page-numbers">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                      .map((p, i, arr) => {
-                        const showEllipsis = i > 0 && p - arr[i - 1] > 1;
-                        return (
-                          <React.Fragment key={p}>
-                            {showEllipsis && <span className="ellipsis">...</span>}
-                            <button
-                              onClick={() => setCurrentPage(p)}
-                              className={`page-number ${currentPage === p ? 'active' : ''}`}
-                            >
-                              {p}
-                            </button>
-                          </React.Fragment>
-                        );
-                      })
-                    }
-                  </div>
-
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    disabled={currentPage === totalPages}
-                    className="nav-button"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
+              <div className="page-navigation">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(c => Math.max(1, c - 1))}
+                  className="nav-button"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(c => Math.min(totalPages, c + 1))}
+                  className="nav-button"
+                >
+                  <ChevronRight size={16} />
+                </button>
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
-    </div >
+    </div>
   );
 }
 

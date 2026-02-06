@@ -59,5 +59,18 @@
     "logout": "Logout",
     "login_footer_text": "Secure access to your tax dashboard",
     "search_positions": "Search symbol...",
-    "group_by_type": "Group by Type"
+    "group_by_type": "Group by Type",
+    "password": "Password",
+    "password_placeholder": "Enter your password",
+    "login": "Login",
+    "register": "Register",
+    "create_account": "Create Account",
+    "sign_in": "Sign In",
+    "already_have_account": "Already have an account? Login",
+    "need_account": "Need an account? Register",
+    "invalid_credentials": "Invalid username or password",
+    "passwords_dont_match": "Passwords do not match",
+    "registration_success": "Registration successful! You can now login.",
+    "confirm_password": "Confirm Password",
+    "confirm_password_placeholder": "Confirm your password"
 }
