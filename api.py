@@ -10,7 +10,14 @@ import numpy as np
 import pandas as pd
 from ibkr_client import IBKRFlexClient, load_config
 from parser import parse_ibkr_xml
-from database import create_user, get_user_by_username
+from database import (
+    create_user, 
+    get_user_by_username, 
+    update_user_profile, 
+    update_user_password,
+    get_user_preferences,
+    update_user_preferences
+)
 from auth import (
     verify_password, 
     get_password_hash, 
@@ -50,6 +57,19 @@ class UserLogin(BaseModel):
     username: str
     password: str
 
+class UserProfileUpdate(BaseModel):
+    email: Optional[str] = None
+    display_name: Optional[str] = None
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+class UserPreferencesUpdate(BaseModel):
+    theme: Optional[str] = None
+    language: Optional[str] = None
+    default_currency: Optional[str] = None
+
 # --- Auth Endpoints ---
 @app.post("/auth/register")
 async def register(user: UserCreate):
@@ -88,6 +108,103 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         data={"sub": user["username"]}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer", "user_id": user["username"]}
+
+# --- User Settings Endpoints ---
+@app.get("/user/profile")
+async def get_user_profile(current_user: str = Depends(get_current_user)):
+    """Get user profile information."""
+    user = get_user_by_username(current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "username": user["username"],
+        "email": user.get("email"),
+        "display_name": user.get("display_name"),
+        "created_at": user.get("created_at")
+    }
+
+@app.put("/user/profile")
+async def update_profile(
+    profile_data: UserProfileUpdate,
+    current_user: str = Depends(get_current_user)
+):
+    """Update user profile information."""
+    success = update_user_profile(
+        current_user,
+        email=profile_data.email,
+        display_name=profile_data.display_name
+    )
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update profile")
+    
+    return {"message": "Profile updated successfully"}
+
+@app.post("/user/change-password")
+async def change_password(
+    password_data: PasswordChange,
+    current_user: str = Depends(get_current_user)
+):
+    """Change user password."""
+    # Verify current password
+    user = get_user_by_username(current_user)
+    if not user or not verify_password(password_data.current_password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect"
+        )
+    
+    # Validate new password strength
+    password_error = validate_password_strength(password_data.new_password)
+    if password_error:
+        raise HTTPException(status_code=400, detail=password_error)
+    
+    # Update password
+    new_hashed_password = get_password_hash(password_data.new_password)
+    success = update_user_password(current_user, new_hashed_password)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update password")
+    
+    return {"message": "Password changed successfully"}
+
+@app.get("/user/preferences")
+async def get_preferences(current_user: str = Depends(get_current_user)):
+    """Get user preferences."""
+    prefs = get_user_preferences(current_user)
+    
+    if not prefs:
+        # Return default preferences if none exist
+        return {
+            "theme": "dark",
+            "language": "en",
+            "default_currency": "USD"
+        }
+    
+    return {
+        "theme": prefs.get("theme", "dark"),
+        "language": prefs.get("language", "en"),
+        "default_currency": prefs.get("default_currency", "USD")
+    }
+
+@app.put("/user/preferences")
+async def update_preferences(
+    prefs_data: UserPreferencesUpdate,
+    current_user: str = Depends(get_current_user)
+):
+    """Update user preferences."""
+    success = update_user_preferences(
+        current_user,
+        theme=prefs_data.theme,
+        language=prefs_data.language,
+        default_currency=prefs_data.default_currency
+    )
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update preferences")
+    
+    return {"message": "Preferences updated successfully"}
 
 # --- Protected Endpoints ---
 @app.get("/")
