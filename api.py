@@ -33,6 +33,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+    print("Health check received")
     return {"status": "healthy"}
 
 @app.get("/config")
