@@ -57,5 +57,7 @@
     "user_id_placeholder": "Enter User ID (any name)",
     "continue": "Continue",
     "logout": "Logout",
-    "login_footer_text": "Secure access to your tax dashboard"
+    "login_footer_text": "Secure access to your tax dashboard",
+    "search_positions": "Search symbol...",
+    "group_by_type": "Group by Type"
 }

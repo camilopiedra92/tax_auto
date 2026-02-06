@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import axios from 'axios';
-import { RefreshCw, TrendingUp, DollarSign, PieChart, LayoutDashboard, Briefcase, Clock, FileText, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Settings as SettingsIcon } from 'lucide-react';
+import { RefreshCw, TrendingUp, DollarSign, PieChart, LayoutDashboard, Briefcase, Clock, FileText, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Settings as SettingsIcon, Search, Layers, List } from 'lucide-react';
 import LanguageSelector from './components/LanguageSelector';
 import Settings from './components/Settings';
 import { PieChart as RPieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip, Sector } from 'recharts';
@@ -84,6 +84,8 @@ function App() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [activeIndex, setActiveIndex] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isGrouped, setIsGrouped] = useState(false);
   const [user, setUser] = useState(() => localStorage.getItem('ibkr_user_id'));
 
   const handleLogin = (userId) => {
@@ -202,9 +204,30 @@ function App() {
   };
 
   const getSortedPositions = (positions) => {
-    if (!sortConfig.key) return positions;
+    // Filter first
+    let result = positions;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(pos =>
+        (pos['@symbol'] || '').toLowerCase().includes(q) ||
+        (pos['@description'] || '').toLowerCase().includes(q)
+      );
+    }
 
-    return [...positions].sort((a, b) => {
+    if (!sortConfig.key && !isGrouped) return result;
+
+    return [...result].sort((a, b) => {
+      // Primary sort if grouped: Asset Category
+      if (isGrouped) {
+        const catA = a['@assetCategory'] || '';
+        const catB = b['@assetCategory'] || '';
+        const catCompare = catA.localeCompare(catB);
+        if (catCompare !== 0) return catCompare;
+      }
+
+      // Secondary (or primary if not grouped) sort: User selection
+      if (!sortConfig.key) return 0;
+
       let aValue = a[sortConfig.key];
       let bValue = b[sortConfig.key];
 
@@ -646,7 +669,40 @@ function App() {
         <div className="glass-card" style={{ overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>{t('open_positions')}</h2>
-            <div style={{ fontSize: '0.875rem', color: 'var(--text-dim)' }}>{t('portfolio_detail')}</div>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <div className="glass-input-container" style={{ width: '200px' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', zIndex: 2 }} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t('search_positions')}
+                  className="glass-input"
+                  style={{ padding: '0.5rem 0.5rem 0.5rem 2.5rem !important', fontSize: '0.9rem !important', height: '36px' }}
+                />
+              </div>
+              <button
+                onClick={() => setIsGrouped(!isGrouped)}
+                style={{
+                  background: isGrouped ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid',
+                  borderColor: isGrouped ? 'var(--accent-primary)' : 'var(--glass-border)',
+                  color: isGrouped ? 'var(--accent-primary)' : 'var(--text-dim)',
+                  padding: '0.4rem 0.8rem',
+                  borderRadius: '0.5rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s ease',
+                  height: '36px'
+                }}
+              >
+                {isGrouped ? <Layers size={16} /> : <List size={16} />}
+                {t('group_by_type')}
+              </button>
+            </div>
           </div>
           <div style={{ overflowX: 'auto', margin: '0 -1.75rem' }}>
             <div style={{ padding: '0 1.75rem' }}>
@@ -738,36 +794,56 @@ function App() {
                 <tbody>
                   <AnimatePresence mode="wait">
                     {paginatedPositions.length > 0 ? (
-                      paginatedPositions.map((pos, idx) => (
-                        <motion.tr
-                          key={`${pos['@symbol']}-${idx}`}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ delay: idx * 0.05 }}
-                        >
-                          <td style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <span>{pos['@symbol']}</span>
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 400 }}>{pos['@description']}</span>
-                            </div>
-                          </td>
-                          <td>{pos['@assetCategory']}</td>
-                          <td>{parseFloat(pos['@position']).toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
-                          <td>{pos['@currency']}</td>
-                          <td style={{ fontWeight: 500 }}>${parseFloat(pos['@openPrice']).toFixed(2)}</td>
-                          <td style={{ fontWeight: 500 }}>${parseFloat(pos['@markPrice']).toFixed(2)}</td>
-                          <td style={{ fontWeight: 600 }}>${parseFloat(pos['@positionValue']).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td>{pos['@percentOfNAV']}%</td>
-                          <td className={(parseFloat(pos['@fifoPnlUnrealized']) || 0) >= 0 ? 'positive' : 'negative'}>
-                            {(parseFloat(pos['@fifoPnlUnrealized']) || 0) >= 0 ? '+' : ''}
-                            ${formatCurrency(pos['@fifoPnlUnrealized'])}
-                          </td>
-                          <td className={(parseFloat(pos['realized_pnl']) || 0) >= 0 ? 'positive' : 'negative'}>
-                            {(parseFloat(pos['realized_pnl']) || 0) >= 0 ? '+' : ''}
-                            ${formatCurrency(pos['realized_pnl'])}
-                          </td>
-                        </motion.tr>
-                      ))
+                      paginatedPositions.map((pos, idx) => {
+                        const showHeader = isGrouped && (idx === 0 || pos['@assetCategory'] !== paginatedPositions[idx - 1]['@assetCategory']);
+                        return (
+                          <React.Fragment key={`${pos['@symbol']}-${idx}`}>
+                            {showHeader && (
+                              <tr className="group-header">
+                                <td colSpan="10" style={{
+                                  background: 'rgba(56, 189, 248, 0.05)',
+                                  color: 'var(--accent-primary)',
+                                  fontWeight: 700,
+                                  padding: '0.75rem 1.25rem',
+                                  fontSize: '0.8rem',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.05em',
+                                  borderBottom: '1px solid rgba(56, 189, 248, 0.1)'
+                                }}>
+                                  {pos['@assetCategory']}
+                                </td>
+                              </tr>
+                            )}
+                            <motion.tr
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: idx * 0.05 }}
+                            >
+                              <td style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <span>{pos['@symbol']}</span>
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 400 }}>{pos['@description']}</span>
+                                </div>
+                              </td>
+                              <td>{pos['@assetCategory']}</td>
+                              <td>{parseFloat(pos['@position']).toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
+                              <td>{pos['@currency']}</td>
+                              <td style={{ fontWeight: 500 }}>${parseFloat(pos['@openPrice']).toFixed(2)}</td>
+                              <td style={{ fontWeight: 500 }}>${parseFloat(pos['@markPrice']).toFixed(2)}</td>
+                              <td style={{ fontWeight: 600 }}>${parseFloat(pos['@positionValue']).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td>{pos['@percentOfNAV']}%</td>
+                              <td className={(parseFloat(pos['@fifoPnlUnrealized']) || 0) >= 0 ? 'positive' : 'negative'}>
+                                {(parseFloat(pos['@fifoPnlUnrealized']) || 0) >= 0 ? '+' : ''}
+                                ${formatCurrency(pos['@fifoPnlUnrealized'])}
+                              </td>
+                              <td className={(parseFloat(pos['realized_pnl']) || 0) >= 0 ? 'positive' : 'negative'}>
+                                {(parseFloat(pos['realized_pnl']) || 0) >= 0 ? '+' : ''}
+                                ${formatCurrency(pos['realized_pnl'])}
+                              </td>
+                            </motion.tr>
+                          </React.Fragment>
+                        );
+                      })
                     ) : (
                       <tr>
                         <td colSpan="10" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-dim)' }}>

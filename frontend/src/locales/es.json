@@ -57,5 +57,7 @@
     "user_id_placeholder": "Ingrese ID de usuario (cualquier nombre)",
     "continue": "Continuar",
     "logout": "Cerrar Sesión",
-    "login_footer_text": "Acceso seguro a su panel de impuestos"
+    "login_footer_text": "Acceso seguro a su panel de impuestos",
+    "search_positions": "Buscar símbolo...",
+    "group_by_type": "Agrupar por Tipo"
 }
