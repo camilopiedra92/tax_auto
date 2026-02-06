@@ -19,6 +19,9 @@ const LanguageSelector = () => {
         { code: 'es', label: 'Español', flag: '🇪🇸' },
     ];
 
+    // Get current language object
+    const currentLanguage = languages.find(lang => i18n.language.startsWith(lang.code)) || languages[0];
+
     return (
         <div style={{ position: 'relative', zIndex: 100 }}>
             <button
@@ -37,8 +40,8 @@ const LanguageSelector = () => {
                     borderRadius: '2rem',
                 }}
             >
-                <Globe size={16} />
-                <span style={{ fontWeight: 600 }}>{i18n.language === 'es' ? 'ES' : 'EN'}</span>
+                <span style={{ fontSize: '1.25rem' }}>{currentLanguage.flag}</span>
+                <span style={{ fontWeight: 600 }}>{currentLanguage.code.toUpperCase()}</span>
             </button>
 
             <AnimatePresence>
