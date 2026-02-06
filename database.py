@@ -5,8 +5,10 @@ from typing import Optional, Dict, Any
 DB_NAME = "users.db"
 
 def get_db_path():
-    # Store db in the same directory as this file or a specific data directory
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), DB_NAME)
+    # Store db in the users directory for persistence
+    users_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users")
+    os.makedirs(users_dir, exist_ok=True)
+    return os.path.join(users_dir, DB_NAME)
 
 def init_db():
     """Initialize the database with the users table."""
