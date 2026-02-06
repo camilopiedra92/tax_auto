@@ -13,7 +13,7 @@ services:
       retries: 3
       start_period: 10s
     volumes:
-      - ./users:/app/users
+      - user_data:/app/users
     networks:
       - ibkr-network
 
@@ -35,3 +35,6 @@ services:
 networks:
   ibkr-network:
     driver: bridge
+
+volumes:
+  user_data:
