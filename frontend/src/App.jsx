@@ -11,44 +11,6 @@ import { LogOut } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
-const renderActiveShape = (props) => {
-  const RADIAN = Math.PI / 180;
-  const { cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
-  const sin = Math.sin(-RADIAN * midAngle);
-  const cos = Math.cos(-RADIAN * midAngle);
-  const sx = cx + (outerRadius + 10) * cos;
-  const sy = cy + (outerRadius + 10) * sin;
-  const mx = cx + (outerRadius + 30) * cos;
-  const my = cy + (outerRadius + 30) * sin;
-  const ex = mx + (cos >= 0 ? 1 : -1) * 22;
-  const ey = my;
-  const textAnchor = cos >= 0 ? 'start' : 'end';
-
-  return (
-    <g>
-      <Sector
-        cx={cx}
-        cy={cy}
-        innerRadius={innerRadius}
-        outerRadius={outerRadius + 8}
-        startAngle={startAngle}
-        endAngle={endAngle}
-        fill={fill}
-      />
-      <Sector
-        cx={cx}
-        cy={cy}
-        startAngle={startAngle}
-        endAngle={endAngle}
-        innerRadius={outerRadius + 8}
-        outerRadius={outerRadius + 12}
-        fill={fill}
-        opacity={0.3}
-      />
-    </g>
-  );
-};
-
 const CustomTooltip = ({ active, payload }) => {
   const { t } = useTranslation();
   if (active && payload && payload.length) {
@@ -83,7 +45,9 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [activeIndex, setActiveIndex] = useState(null);
+  const [focusedIndex, setFocusedIndex] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const labelsGeometryRef = React.useRef({});
   const [searchQuery, setSearchQuery] = useState('');
   const [isGrouped, setIsGrouped] = useState(false);
   const [distributionMode, setDistributionMode] = useState('category'); // 'category', 'currency', 'symbol'
@@ -314,7 +278,7 @@ function App() {
   const startIndex = (currentPage - 1) * rowsPerPage;
   const paginatedPositions = sortedPositions.slice(startIndex, startIndex + rowsPerPage);
 
-  const getChartData = () => {
+  const chartData = React.useMemo(() => {
     if (!openPositions.length) return [];
 
     if (distributionMode === 'category') {
@@ -325,7 +289,7 @@ function App() {
         categories[cat] = (categories[cat] || 0) + val;
       });
       return Object.entries(categories)
-        .sort((a, b) => b[1] - a[1]) // Sort by value
+        .sort((a, b) => b[1] - a[1])
         .map(([name, value]) => ({ name, value, type: 'category' }));
     }
 
@@ -337,7 +301,7 @@ function App() {
         currencies[curr] = (currencies[curr] || 0) + val;
       });
       return Object.entries(currencies)
-        .sort((a, b) => b[1] - a[1]) // Sort by value
+        .sort((a, b) => b[1] - a[1])
         .map(([name, value]) => ({ name, value, type: 'currency' }));
     }
 
@@ -363,23 +327,21 @@ function App() {
     }
 
     return mainPositions;
-  };
+  }, [openPositions, distributionMode, t]);
 
-  const chartData = getChartData();
-
-  const getInsights = () => {
+  const insights = React.useMemo(() => {
     if (!openPositions.length) return [];
 
     // Concentration
     const sorted = [...openPositions].sort((a, b) =>
       (Math.abs(parseFloat(b['@percentOfNAV'])) || 0) - (Math.abs(parseFloat(a['@percentOfNAV'])) || 0)
     );
-    const top3 = sorted.slice(0, 3).reduce((sum, p) => sum + (Math.abs(parseFloat(p['@percentOfNAV'])) || 0), 0);
+    const top3 = sorted.slice(0, 3).reduce((acc, pos) => acc + (Math.abs(parseFloat(pos['@percentOfNAV'])) || 0), 0);
 
-    // Exposure
+    // Market Exposure
     const categories = {};
     openPositions.forEach(pos => {
-      const cat = pos['@assetCategory'] || 'Other';
+      const cat = (pos['@assetCategory'] || 'Other').trim();
       const val = Math.abs(parseFloat(pos['@percentOfNAV']) || 0);
       categories[cat] = (categories[cat] || 0) + val;
     });
@@ -395,9 +357,144 @@ function App() {
       { title: t('market_exposure'), value: mainExposure ? mainExposure[0] : 'N/A', msg: t('exposure_msg', { type: mainExposure ? mainExposure[0] : 'N/A', percent: mainExposure ? mainExposure[1].toFixed(1) : '0' }), icon: <TrendingUp size={16} /> },
       { title: t('diversification_score'), value: score, msg: '', icon: <PieChart size={16} /> }
     ];
-  };
+  }, [openPositions, t]);
 
-  const insights = getInsights();
+  const internalActiveIndex = focusedIndex !== null ? focusedIndex : activeIndex;
+
+  const renderActiveShape = React.useCallback((props) => {
+    // Recharts sometimes skips props in active state. Recover from chartData.
+    const index = props.index;
+    const data = chartData[index];
+    if (!data) return null;
+
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+    const isFocused = index === focusedIndex;
+
+    return (
+      <g>
+        <Sector
+          cx={cx}
+          cy={cy}
+          innerRadius={innerRadius}
+          outerRadius={outerRadius + (isFocused ? 12 : 8)}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={fill}
+        />
+        <Sector
+          cx={cx}
+          cy={cy}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          innerRadius={outerRadius + (isFocused ? 12 : 8)}
+          outerRadius={outerRadius + (isFocused ? 18 : 12)}
+          fill={fill}
+          opacity={isFocused ? 0.5 : 0.3}
+        />
+      </g>
+    );
+  }, [chartData, focusedIndex]);
+
+  const renderCustomizedLabel = React.useCallback((props) => {
+    // Recover missing props from chartData using index
+    const index = props.index !== undefined ? props.index : props.payload?.index;
+    if (index === undefined) return null;
+
+    const data = chartData[index];
+    if (!data) return null;
+
+    // Cache geometry for hover stability
+    if (props.midAngle !== undefined && props.outerRadius !== undefined) {
+      labelsGeometryRef.current[index] = {
+        midAngle: props.midAngle,
+        outerRadius: props.outerRadius,
+        cx: props.cx,
+        cy: props.cy
+      };
+    }
+
+    const geom = labelsGeometryRef.current[index];
+    if (!geom && props.midAngle === undefined) return null;
+
+    const RADIAN = Math.PI / 180;
+    const cx = props.cx ?? geom?.cx;
+    const cy = props.cy ?? geom?.cy;
+    const midAngle = props.midAngle ?? geom?.midAngle;
+    const outerRadius = props.outerRadius ?? geom?.outerRadius;
+    const fill = props.fill;
+
+    const name = data.name;
+    const value = data.value;
+
+    const sin = Math.sin(-RADIAN * midAngle);
+    const cos = Math.cos(-RADIAN * midAngle);
+    const sx = cx + (outerRadius + 5) * cos;
+    const sy = cy + (outerRadius + 5) * sin;
+    const mx = cx + (outerRadius + 25) * cos;
+    const my = cy + (outerRadius + 25) * sin;
+    const ex = mx + (cos >= 0 ? 1 : -1) * 22;
+    const ey = my;
+    const textAnchor = cos >= 0 ? 'start' : 'end';
+
+    const isSymbol = data.type === 'symbol' && !data.isOthers;
+    const isFocused = index === internalActiveIndex;
+    const ticker = (name || '').split(' ')[0];
+    const logoToken = import.meta.env.VITE_LOGO_DEV_TOKEN;
+    const logoUrl = (isSymbol && ticker && logoToken) ? `https://img.logo.dev/ticker/${ticker.toLowerCase()}?token=${logoToken}` : null;
+
+    return (
+      <g opacity={focusedIndex !== null && !isFocused ? 0.3 : 1}>
+        <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" opacity={isFocused ? 1 : 0.4} strokeWidth={isFocused ? 2 : 1} />
+        <circle cx={ex} cy={ey} r={isFocused ? 3 : 2} fill={fill} stroke="none" />
+
+        <g transform={`translate(${ex + (cos >= 0 ? 8 : -8)}, ${ey})`}>
+          {isSymbol && logoUrl && (
+            <foreignObject x={cos >= 0 ? 0 : -20} y={-10} width={20} height={20}>
+              <div style={{
+                width: isFocused ? '20px' : '18px',
+                height: isFocused ? '20px' : '18px',
+                borderRadius: '4px',
+                background: 'rgba(255,255,255,0.05)',
+                border: `1px solid ${isFocused ? fill : 'rgba(255,255,255,0.1)'}`,
+                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.3s ease'
+              }}>
+                <img
+                  src={logoUrl}
+                  alt=""
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '2px' }}
+                  onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.style.background = fill; }}
+                />
+              </div>
+            </foreignObject>
+          )}
+
+          <text
+            x={cos >= 0 ? (isSymbol ? 26 : 0) : (isSymbol ? -26 : 0)}
+            y={0}
+            dy={4}
+            textAnchor={textAnchor}
+            fill={isFocused ? 'var(--text-main)' : 'var(--text-dim)'}
+            style={{ fontSize: isFocused ? '0.85rem' : '0.7rem', fontWeight: isFocused ? 800 : 500, transition: 'all 0.3s ease' }}
+          >
+            {name}
+          </text>
+          <text
+            x={cos >= 0 ? (isSymbol ? 26 : 0) : (isSymbol ? -26 : 0)}
+            y={16}
+            textAnchor={textAnchor}
+            fill={isFocused ? 'var(--accent-primary)' : 'var(--text-dim)'}
+            style={{ fontSize: isFocused ? '0.75rem' : '0.6rem', fontWeight: 600, transition: 'all 0.3s ease' }}
+          >
+            {value.toFixed(1)}%
+          </text>
+        </g>
+      </g>
+    );
+  }, [chartData, internalActiveIndex, focusedIndex]);
 
   const COLORS = [
     '#38bdf8', '#818cf8', '#c084fc', '#f472b6', '#fb7185',
@@ -660,26 +757,32 @@ function App() {
 
           <div className="distribution-content-wrapper">
             <div className="distribution-chart-section">
-              <div style={{ minHeight: '300px', width: '100%', position: 'relative', display: 'flex', justifyContent: 'center' }}>
-                <ResponsiveContainer width="100%" height={300}>
-                  <RPieChart>
+              <div style={{ minHeight: '400px', width: '100%', position: 'relative', display: 'flex', justifyContent: 'center' }}>
+                <ResponsiveContainer width="100%" height={400}>
+                  <RPieChart margin={{ top: 20, right: 100, bottom: 20, left: 100 }}>
                     <Pie
-                      activeIndex={activeIndex}
+                      isAnimationActive={false}
+                      activeIndex={internalActiveIndex}
                       activeShape={renderActiveShape}
                       data={chartData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={80}
-                      outerRadius={110}
+                      innerRadius={70}
+                      outerRadius={100}
                       paddingAngle={chartData.length > 1 ? 4 : 0}
                       dataKey="value"
+                      label={renderCustomizedLabel}
+                      labelLine={false}
                       onMouseEnter={onPieEnter}
                       onMouseLeave={() => setActiveIndex(null)}
-                      onClick={(data) => {
+                      onClick={(data, index) => {
                         if (data && data.name) {
-                          if (selectedFilter?.value === data.name) {
+                          // Toggle focus
+                          if (focusedIndex === index) {
+                            setFocusedIndex(null);
                             setSelectedFilter(null);
                           } else {
+                            setFocusedIndex(index);
                             setSelectedFilter({ type: distributionMode, value: data.name });
                           }
                         }
@@ -731,9 +834,9 @@ function App() {
                     lineHeight: 1,
                     transition: 'all 0.3s ease'
                   }}>
-                    {activeIndex !== null ? `${chartData[activeIndex]?.value.toFixed(1)}%` : '100%'}
+                    {internalActiveIndex !== null ? `${chartData[internalActiveIndex]?.value.toFixed(1)}%` : '100%'}
                   </span>
-                  {activeIndex !== null && (
+                  {internalActiveIndex !== null && (
                     <motion.span
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -749,8 +852,11 @@ function App() {
               {distributionMode !== 'symbol' && chartData.length > 1 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', justifyContent: 'center', marginTop: '1rem' }}>
                   {chartData.map((item, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: activeIndex === i ? 'var(--text-main)' : 'var(--text-dim)', transition: 'all 0.2s' }}>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: COLORS[i % COLORS.length] }} />
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: internalActiveIndex === i ? 'var(--text-main)' : 'var(--text-dim)', transition: 'all 0.2s' }}>
+                      <div
+                        onClick={() => setFocusedIndex(focusedIndex === i ? null : i)}
+                        style={{ width: '8px', height: '8px', borderRadius: '50%', background: COLORS[i % COLORS.length], cursor: 'pointer' }}
+                      />
                       <span>{item.name}</span>
                     </div>
                   ))}
