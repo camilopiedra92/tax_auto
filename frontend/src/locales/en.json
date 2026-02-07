@@ -112,5 +112,23 @@
     "diversification_low": "Low",
     "diversification_med": "Medium",
     "diversification_high": "High",
-    "clear_filter": "Clear Filter"
+    "clear_filter": "Clear Filter",
+    "asset_types": {
+        "STK": "Stocks",
+        "OPT": "Options",
+        "FUT": "Futures",
+        "CASH": "Cash",
+        "BOND": "Bonds",
+        "FUND": "Funds",
+        "Other": "Others"
+    },
+    "asset_types_singular": {
+        "STK": "Stock",
+        "OPT": "Option",
+        "FUT": "Future",
+        "CASH": "Cash",
+        "BOND": "Bond",
+        "FUND": "Fund",
+        "Other": "Others"
+    }
 }

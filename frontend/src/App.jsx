@@ -51,7 +51,7 @@ function App() {
   const chartContainerRef = useRef(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isGrouped, setIsGrouped] = useState(false);
-  const [distributionMode, setDistributionMode] = useState('category'); // 'category', 'currency', 'symbol'
+  const [distributionMode, setDistributionMode] = useState('symbol'); // 'category', 'currency', 'symbol'
   const [selectedFilter, setSelectedFilter] = useState(null);
   const [user, setUser] = useState(() => localStorage.getItem('ibkr_user_id'));
   const [token, setToken] = useState(() => localStorage.getItem('ibkr_token'));
@@ -174,6 +174,15 @@ function App() {
     return then.toLocaleDateString();
   };
 
+  const getAssetLabel = React.useCallback((code, singular = false) => {
+    const normalized = (code || '').trim();
+    if (!normalized) return t(singular ? 'asset_types_singular.Other' : 'asset_types.Other');
+
+    // Check if translation exists, otherwise fall back to code
+    const key = singular ? `asset_types_singular.${normalized}` : `asset_types.${normalized}`;
+    return t(key, { defaultValue: normalized });
+  }, [t]);
+
   const fetchData = async (isSync = false) => {
     setLoading(true);
     setError(null);
@@ -245,7 +254,7 @@ function App() {
 
     if (selectedFilter) {
       result = result.filter(pos => {
-        if (selectedFilter.type === 'category') return pos['@assetCategory'] === selectedFilter.value;
+        if (selectedFilter.type === 'category') return getAssetLabel(pos['@assetCategory']) === selectedFilter.value;
         if (selectedFilter.type === 'currency') return pos['@currency'] === selectedFilter.value;
         if (selectedFilter.type === 'symbol') {
           if (selectedFilter.value === t('others')) {
@@ -266,8 +275,8 @@ function App() {
     return [...result].sort((a, b) => {
       // Primary sort if grouped: Asset Category
       if (isGrouped) {
-        const catA = a['@assetCategory'] || '';
-        const catB = b['@assetCategory'] || '';
+        const catA = getAssetLabel(a['@assetCategory']);
+        const catB = getAssetLabel(b['@assetCategory']);
         const catCompare = catA.localeCompare(catB);
         if (catCompare !== 0) return catCompare;
       }
@@ -309,7 +318,7 @@ function App() {
     if (distributionMode === 'category') {
       const categories = {};
       openPositions.forEach(pos => {
-        const cat = (pos['@assetCategory'] || 'Other').trim();
+        const cat = getAssetLabel(pos['@assetCategory']);
         const val = Math.abs(parseFloat(pos['@percentOfNAV']) || 0);
         categories[cat] = (categories[cat] || 0) + val;
       });
@@ -366,7 +375,7 @@ function App() {
     // Market Exposure
     const categories = {};
     openPositions.forEach(pos => {
-      const cat = (pos['@assetCategory'] || 'Other').trim();
+      const cat = getAssetLabel(pos['@assetCategory']);
       const val = Math.abs(parseFloat(pos['@percentOfNAV']) || 0);
       categories[cat] = (categories[cat] || 0) + val;
     });
@@ -789,7 +798,7 @@ function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>{t('distribution')}</h2>
               <div style={{ display: 'flex', gap: '0.4rem', background: 'rgba(255,255,255,0.03)', padding: '0.25rem', borderRadius: '0.75rem', border: '1px solid var(--glass-border)' }}>
-                {['category', 'currency', 'symbol'].map((mode) => (
+                {['symbol', 'category', 'currency'].map((mode) => (
                   <button
                     key={mode}
                     onClick={() => setDistributionMode(mode)}
@@ -1124,13 +1133,13 @@ function App() {
                   <AnimatePresence mode="wait">
                     {paginatedPositions.length > 0 ? (
                       paginatedPositions.map((pos, idx) => {
-                        const showHeader = isGrouped && (idx === 0 || pos['@assetCategory'] !== paginatedPositions[idx - 1]['@assetCategory']);
+                        const showHeader = isGrouped && (idx === 0 || getAssetLabel(pos['@assetCategory']) !== getAssetLabel(paginatedPositions[idx - 1]['@assetCategory']));
                         return (
                           <React.Fragment key={`${pos['@symbol']}-${idx}`}>
                             {showHeader && (
                               <tr className="group-header-row">
                                 <td colSpan={10} style={{ padding: '0.8rem 1rem', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--accent-primary)', fontWeight: 700, fontSize: '0.9rem' }}>
-                                  {pos['@assetCategory']}
+                                  {getAssetLabel(pos['@assetCategory'])}
                                 </td>
                               </tr>
                             )}
@@ -1173,7 +1182,7 @@ function App() {
                                   {pos['@symbol']}
                                 </div>
                               </td>
-                              <td style={{ color: 'var(--text-dim)' }}>{pos['@assetCategory']}</td>
+                              <td style={{ color: 'var(--text-dim)' }}>{getAssetLabel(pos['@assetCategory'], true)}</td>
                               <td>{parseFloat(pos['@position']).toLocaleString()}</td>
                               <td style={{ color: 'var(--text-dim)' }}>{pos['@currency']}</td>
                               <td>{formatCurrency(pos['@openPrice'] || 0)}</td>
