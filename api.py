@@ -340,10 +340,6 @@ async def get_latest_report(current_user: str = Depends(get_current_user)):
                     last_sync = json.load(f).get("last_sync")
             except:
                 pass
-        
-        if not last_sync:
-            mtime = os.path.getmtime(report_path)
-            last_sync = datetime.fromtimestamp(mtime).isoformat()
 
         # Clean summary dict for NaNs
         clean_summary = {}

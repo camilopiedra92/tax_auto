@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, ChevronLeft, ChevronRight, Filter, ChevronUp, ChevronDown, Download } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 const TradesList = ({ trades = [], distributionMode, selectedFilter, searchQuery }) => {
     const { t } = useTranslation();
@@ -14,7 +14,7 @@ const TradesList = ({ trades = [], distributionMode, selectedFilter, searchQuery
     // Reset page when filters change
     React.useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, filterType]);
+    }, [searchQuery, filterType, selectedFilter]);
 
     const requestSort = (key) => {
         let direction = 'ascending';
@@ -24,7 +24,7 @@ const TradesList = ({ trades = [], distributionMode, selectedFilter, searchQuery
         setSortConfig({ key, direction });
     };
 
-    const getSortedTrades = () => {
+    const sortedTrades = useMemo(() => {
         if (!trades) return [];
 
         let result = [...trades];
@@ -36,6 +36,17 @@ const TradesList = ({ trades = [], distributionMode, selectedFilter, searchQuery
                 (trade['@symbol'] || '').toLowerCase().includes(q) ||
                 (trade['@description'] || '').toLowerCase().includes(q)
             );
+        }
+
+        // Filter by selectedFilter (from chart selection)
+        if (selectedFilter) {
+            result = result.filter(trade => {
+                if (selectedFilter.type === 'symbol') {
+                    return trade['@symbol'] === selectedFilter.value;
+                }
+                // Add other filter types if needed in the future
+                return true;
+            });
         }
 
         // Filter by type
@@ -75,9 +86,8 @@ const TradesList = ({ trades = [], distributionMode, selectedFilter, searchQuery
         }
 
         return result;
-    };
+    }, [trades, searchQuery, selectedFilter, filterType, sortConfig]);
 
-    const sortedTrades = getSortedTrades();
     const totalPages = Math.ceil(sortedTrades.length / rowsPerPage);
     const startIndex = (currentPage - 1) * rowsPerPage;
     const paginatedTrades = sortedTrades.slice(startIndex, startIndex + rowsPerPage);
@@ -248,82 +258,79 @@ const TradesList = ({ trades = [], distributionMode, selectedFilter, searchQuery
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <AnimatePresence>
-                                        {paginatedTrades.map((trade, index) => (
-                                            <motion.tr
-                                                key={trade['@tradeID'] || index}
-                                                initial={{ opacity: 0, y: 5 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0 }}
-                                                transition={{ delay: index * 0.03 }}
-                                                whileHover={{ backgroundColor: 'rgba(255,255,255,0.02)' }}
-                                            >
-                                                <td style={{ color: 'var(--text-dim)' }}>
-                                                    {formatDate(trade['@dateTime'] || trade['@tradeDate'])}
-                                                </td>
-                                                <td style={{ fontWeight: 600 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                        {(() => {
-                                                            const ticker = (trade['@symbol'] || '').split(' ')[0];
-                                                            const logoToken = import.meta.env.VITE_LOGO_DEV_TOKEN;
-                                                            const logoUrl = (ticker && logoToken && trade['@assetCategory'] === 'STK') ? `https://img.logo.dev/ticker/${ticker.toLowerCase()}?token=${logoToken}` : null;
+                                    {paginatedTrades.map((trade, index) => (
+                                        <motion.tr
+                                            key={trade['@tradeID'] || index}
+                                            initial={false}
+                                            animate={{ opacity: 1 }}
+                                            transition={{ duration: 0.15 }}
+                                            whileHover={{ backgroundColor: 'rgba(255,255,255,0.02)' }}
+                                        >
+                                            <td style={{ color: 'var(--text-dim)' }}>
+                                                {formatDate(trade['@dateTime'] || trade['@tradeDate'])}
+                                            </td>
+                                            <td style={{ fontWeight: 600 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    {(() => {
+                                                        const ticker = (trade['@symbol'] || '').split(' ')[0];
+                                                        const logoToken = import.meta.env.VITE_LOGO_DEV_TOKEN;
+                                                        const logoUrl = (ticker && logoToken && trade['@assetCategory'] === 'STK') ? `https://img.logo.dev/ticker/${ticker.toLowerCase()}?token=${logoToken}` : null;
 
-                                                            return (
-                                                                <div
-                                                                    className="ticker-logo-container"
-                                                                    style={{ cursor: 'pointer' }}
-                                                                >
-                                                                    <img
-                                                                        src={logoUrl}
-                                                                        alt={trade['@symbol']}
-                                                                        className="ticker-logo"
-                                                                        style={{ display: logoUrl ? 'block' : 'none' }}
-                                                                        onError={(e) => {
-                                                                            e.target.style.display = 'none';
-                                                                            e.target.parentElement.classList.add('fallback');
-                                                                        }}
-                                                                    />
-                                                                    <span className="ticker-fallback-icon">{trade['@symbol']?.[0]}</span>
-                                                                </div>
-                                                            );
-                                                        })()}
-                                                        {trade['@symbol']}
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span style={{
-                                                        padding: '2px 8px',
-                                                        borderRadius: '6px',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 700,
-                                                        background: trade['@buySell'] === 'BUY' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                                                        color: trade['@buySell'] === 'BUY' ? 'var(--success)' : 'var(--danger)',
-                                                        border: `1px solid ${trade['@buySell'] === 'BUY' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
-                                                        textTransform: 'uppercase'
-                                                    }}>
-                                                        {trade['@buySell'] === 'BUY' ? t('buy') : t('sell')}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    {formatNumber(Math.abs(trade['@quantity']))}
-                                                </td>
-                                                <td>
-                                                    {trade['@tradePrice']}
-                                                </td>
-                                                <td>
-                                                    {formatCurrency(Math.abs(trade['@tradeMoney']), trade['@currency'])}
-                                                </td>
-                                                <td style={{ color: 'var(--text-dim)' }}>
-                                                    {formatNumber(Math.abs(parseFloat(trade['@ibCommission'])))}
-                                                </td>
-                                                <td>
-                                                    <span className={(parseFloat(trade['@fifoPnlRealized']) || 0) >= 0 ? 'positive' : 'negative'}>
-                                                        {parseFloat(trade['@fifoPnlRealized']) !== 0 ? formatCurrency(trade['@fifoPnlRealized'], trade['@currency']) : '-'}
-                                                    </span>
-                                                </td>
-                                            </motion.tr>
-                                        ))}
-                                    </AnimatePresence>
+                                                        return (
+                                                            <div
+                                                                className="ticker-logo-container"
+                                                                style={{ cursor: 'pointer' }}
+                                                            >
+                                                                <img
+                                                                    src={logoUrl}
+                                                                    alt={trade['@symbol']}
+                                                                    className="ticker-logo"
+                                                                    style={{ display: logoUrl ? 'block' : 'none' }}
+                                                                    onError={(e) => {
+                                                                        e.target.style.display = 'none';
+                                                                        e.target.parentElement.classList.add('fallback');
+                                                                    }}
+                                                                />
+                                                                <span className="ticker-fallback-icon">{trade['@symbol']?.[0]}</span>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                    {trade['@symbol']}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span style={{
+                                                    padding: '2px 8px',
+                                                    borderRadius: '6px',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 700,
+                                                    background: trade['@buySell'] === 'BUY' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                                    color: trade['@buySell'] === 'BUY' ? 'var(--success)' : 'var(--danger)',
+                                                    border: `1px solid ${trade['@buySell'] === 'BUY' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+                                                    textTransform: 'uppercase'
+                                                }}>
+                                                    {trade['@buySell'] === 'BUY' ? t('buy') : t('sell')}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {formatNumber(Math.abs(trade['@quantity']))}
+                                            </td>
+                                            <td>
+                                                {trade['@tradePrice']}
+                                            </td>
+                                            <td>
+                                                {formatCurrency(Math.abs(trade['@tradeMoney']), trade['@currency'])}
+                                            </td>
+                                            <td style={{ color: 'var(--text-dim)' }}>
+                                                {formatNumber(Math.abs(parseFloat(trade['@ibCommission'])))}
+                                            </td>
+                                            <td>
+                                                <span className={(parseFloat(trade['@fifoPnlRealized']) || 0) >= 0 ? 'positive' : 'negative'}>
+                                                    {parseFloat(trade['@fifoPnlRealized']) !== 0 ? formatCurrency(trade['@fifoPnlRealized'], trade['@currency']) : '-'}
+                                                </span>
+                                            </td>
+                                        </motion.tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>

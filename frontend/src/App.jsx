@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import axios from 'axios';
-import { RefreshCw, TrendingUp, DollarSign, PieChart, LayoutDashboard, Briefcase, Clock, FileText, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Settings as SettingsIcon, Search, Layers, List } from 'lucide-react';
+import { RefreshCw, TrendingUp, DollarSign, PieChart, LayoutDashboard, Briefcase, Clock, FileText, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Settings as SettingsIcon, Search, Layers, List, Globe } from 'lucide-react';
 import LanguageSelector from './components/LanguageSelector';
 import Settings from './components/Settings';
 import { PieChart as RPieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip, Sector } from 'recharts';
@@ -49,7 +49,7 @@ function App() {
   const labelsGeometryRef = React.useRef({});
   const chartContainerRef = useRef(null);
   const [activeTab, setActiveTab] = useState('positions');
-  const [distributionMode, setDistributionMode] = useState('symbol'); // 'category', 'currency', 'symbol'
+  const [distributionMode, setDistributionMode] = useState('symbol'); // 'category', 'currency', 'symbol', 'country'
   const [selectedFilter, setSelectedFilter] = useState(null);
   const [globalSearch, setGlobalSearch] = useState('');
 
@@ -138,6 +138,11 @@ function App() {
     document.body.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // Debug: Log when selectedFilter changes
+  useEffect(() => {
+    console.log('selectedFilter changed:', selectedFilter);
+  }, [selectedFilter]);
+
   const formatIBKRDate = (timestamp) => {
     if (!timestamp) return t('not_available');
     try {
@@ -188,6 +193,15 @@ function App() {
 
     // Check if translation exists, otherwise fall back to code
     const key = singular ? `asset_types_singular.${normalized}` : `asset_types.${normalized}`;
+    return t(key, { defaultValue: normalized });
+  }, [t]);
+
+  const getCountryName = React.useCallback((code) => {
+    const normalized = (code || '').trim().toUpperCase();
+    if (!normalized || normalized === 'N/A') return t('country_unknown', { defaultValue: 'Unknown' });
+
+    // Check if translation exists, otherwise fall back to code
+    const key = `countries.${normalized}`;
     return t(key, { defaultValue: normalized });
   }, [t]);
 
@@ -276,6 +290,23 @@ function App() {
         .map(([name, value]) => ({ name, value, type: 'currency' }));
     }
 
+    if (distributionMode === 'country') {
+      const countries = {};
+      openPositions.forEach(pos => {
+        const countryCode = (pos['@issuerCountryCode'] || 'N/A').trim();
+        const val = Math.abs(parseFloat(pos['@percentOfNAV']) || 0);
+        countries[countryCode] = (countries[countryCode] || 0) + val;
+      });
+      return Object.entries(countries)
+        .sort((a, b) => b[1] - a[1])
+        .map(([code, value]) => ({
+          name: getCountryName(code),
+          value,
+          type: 'country',
+          countryCode: code // Store the code for filtering
+        }));
+    }
+
     // Default: symbol (position)
     const sorted = [...openPositions].sort((a, b) =>
       (Math.abs(parseFloat(b['@percentOfNAV'])) || 0) - (Math.abs(parseFloat(a['@percentOfNAV'])) || 0)
@@ -298,7 +329,7 @@ function App() {
     }
 
     return mainPositions;
-  }, [openPositions, distributionMode, t]);
+  }, [openPositions, distributionMode, t, getCountryName]);
 
   const insights = React.useMemo(() => {
     if (!openPositions.length) return [];
@@ -318,6 +349,17 @@ function App() {
     });
     const mainExposure = Object.entries(categories).sort((a, b) => b[1] - a[1])[0];
 
+    // Geographic Exposure
+    const countries = {};
+    openPositions.forEach(pos => {
+      const countryCode = (pos['@issuerCountryCode'] || 'N/A').trim();
+      const val = Math.abs(parseFloat(pos['@percentOfNAV']) || 0);
+      countries[countryCode] = (countries[countryCode] || 0) + val;
+    });
+    const mainCountry = Object.entries(countries).sort((a, b) => b[1] - a[1])[0];
+    const mainCountryName = mainCountry ? getCountryName(mainCountry[0]) : 'N/A';
+    const mainCountryPercent = mainCountry ? mainCountry[1].toFixed(1) : '0';
+
     // Diversification
     let score = t('diversification_low');
     if (openPositions.length > 10 && Object.keys(categories).length > 2) score = t('diversification_high');
@@ -326,9 +368,10 @@ function App() {
     return [
       { title: t('concentration_top_3'), value: `${top3.toFixed(1)}%`, msg: t('concentration_msg', { percent: top3.toFixed(1) }), icon: <Layers size={20} /> },
       { title: t('market_exposure'), value: mainExposure ? mainExposure[0] : 'N/A', msg: t('exposure_msg', { type: mainExposure ? mainExposure[0] : 'N/A', percent: mainExposure ? mainExposure[1].toFixed(1) : '0' }), icon: <TrendingUp size={20} /> },
+      { title: t('geographic_exposure'), value: mainCountryName, msg: t('geographic_msg', { country: mainCountryName, percent: mainCountryPercent }), icon: <Globe size={20} /> },
       { title: t('diversification_score'), value: score, msg: '', icon: <PieChart size={20} /> }
     ];
-  }, [openPositions, t]);
+  }, [openPositions, t, getCountryName]);
 
   const internalActiveIndex = activeIndex !== null ? activeIndex : focusedIndex;
 
@@ -735,14 +778,14 @@ function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>{t('distribution')}</h2>
               <div style={{ display: 'flex', gap: '0.4rem', background: 'rgba(255,255,255,0.03)', padding: '0.25rem', borderRadius: '0.75rem', border: '1px solid var(--glass-border)' }}>
-                {['symbol', 'category', 'currency'].map((mode) => (
+                {['symbol', 'category', 'currency', 'country'].map((mode) => (
                   <button
                     key={mode}
                     onClick={() => setDistributionMode(mode)}
                     className={`toggle-tab ${distributionMode === mode ? 'active' : ''}`}
                     style={{ border: 'none', padding: '0.4rem 0.75rem', fontSize: '0.75rem' }}
                   >
-                    {t(`by_${mode === 'category' ? 'asset_class' : mode === 'currency' ? 'currency' : 'symbol'}`)}
+                    {t(`by_${mode === 'category' ? 'asset_class' : mode === 'currency' ? 'currency' : mode === 'country' ? 'country' : 'symbol'}`)}
                   </button>
                 ))}
               </div>
@@ -779,13 +822,27 @@ function App() {
                       onMouseLeave={() => setActiveIndex(null)}
                       onClick={(data, index) => {
                         if (data && data.name) {
-                          // Toggle focus
-                          if (focusedIndex === index) {
-                            setFocusedIndex(null);
-                            setSelectedFilter(null);
+                          // For country mode, use the countryCode for filtering
+                          const filterValue = distributionMode === 'country' && data.countryCode
+                            ? data.countryCode
+                            : data.name;
+
+                          // Toggle focus: check if we're clicking the same segment
+                          const isSameSegment = focusedIndex === index;
+                          const isSameFilter = selectedFilter &&
+                            selectedFilter.type === distributionMode &&
+                            selectedFilter.value === filterValue;
+
+                          if (isSameSegment || isSameFilter) {
+                            // Deselect if clicking the same segment
+                            // Use functional updates to ensure both states update together
+                            setFocusedIndex(() => null);
+                            setSelectedFilter(() => null);
+                            setGlobalSearch('');
                           } else {
-                            setFocusedIndex(index);
-                            setSelectedFilter({ type: distributionMode, value: data.name });
+                            // Select the new segment
+                            setFocusedIndex(() => index);
+                            setSelectedFilter(() => ({ type: distributionMode, value: filterValue }));
                           }
                         }
                       }}
@@ -872,12 +929,27 @@ function App() {
                         background: internalActiveIndex === i ? 'rgba(255,255,255,0.05)' : 'transparent'
                       }}
                       onClick={() => {
-                        if (focusedIndex === i) {
-                          setFocusedIndex(null);
-                          setSelectedFilter(null);
+                        // For country mode, use the countryCode for filtering
+                        const filterValue = distributionMode === 'country' && item.countryCode
+                          ? item.countryCode
+                          : item.name;
+
+                        // Toggle focus: check if we're clicking the same segment
+                        const isSameSegment = focusedIndex === i;
+                        const isSameFilter = selectedFilter &&
+                          selectedFilter.type === distributionMode &&
+                          selectedFilter.value === filterValue;
+
+                        if (isSameSegment || isSameFilter) {
+                          // Deselect if clicking the same segment
+                          // Use functional updates to ensure both states update together
+                          setFocusedIndex(() => null);
+                          setSelectedFilter(() => null);
+                          setGlobalSearch('');
                         } else {
-                          setFocusedIndex(i);
-                          setSelectedFilter({ type: distributionMode, value: item.name });
+                          // Select the new segment
+                          setFocusedIndex(() => i);
+                          setSelectedFilter(() => ({ type: distributionMode, value: filterValue }));
                         }
                       }}
                     >
@@ -892,10 +964,10 @@ function App() {
             </div>
 
             <div className="insights-panel">
-              <h3 style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '1.25rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              <h3 style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 {t('portfolio_insights')}
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {insights.map((insight, idx) => (
                   <motion.div
                     key={idx}
@@ -1026,6 +1098,7 @@ function App() {
                   transition={{ duration: 0.2 }}
                 >
                   <OpenPositions
+                    key={selectedFilter ? `${selectedFilter.type}-${selectedFilter.value}` : 'no-filter'}
                     positions={openPositions}
                     selectedFilter={selectedFilter}
                     searchQuery={globalSearch}
@@ -1042,6 +1115,7 @@ function App() {
                 >
                   {data?.Trades ? (
                     <TradesList
+                      key={selectedFilter ? `${selectedFilter.type}-${selectedFilter.value}` : 'no-filter'}
                       trades={data.Trades}
                       distributionMode={distributionMode}
                       selectedFilter={selectedFilter}

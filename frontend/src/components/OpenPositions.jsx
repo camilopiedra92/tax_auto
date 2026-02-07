@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Layers, List, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const OpenPositions = ({
@@ -17,6 +17,7 @@ const OpenPositions = ({
 
     // Reset to first page when sorting or rows per page change
     useEffect(() => {
+        console.log('OpenPositions - selectedFilter changed:', selectedFilter);
         setCurrentPage(1);
     }, [sortConfig, rowsPerPage, selectedFilter, searchQuery, isGrouped]);
 
@@ -42,8 +43,9 @@ const OpenPositions = ({
         setSortConfig({ key, direction });
     };
 
-    const getSortedPositions = (positionsList) => {
-        let result = positionsList || [];
+    const sortedPositions = React.useMemo(() => {
+        console.log('OpenPositions - useMemo recalculating with selectedFilter:', selectedFilter);
+        let result = positions || [];
 
         // Filter by search query
         if (searchQuery) {
@@ -56,9 +58,11 @@ const OpenPositions = ({
 
         // Filter by external filter (chart selection)
         if (selectedFilter) {
+            console.log('OpenPositions - Applying filter:', selectedFilter);
             result = result.filter(pos => {
                 if (selectedFilter.type === 'category') return getAssetLabel(pos['@assetCategory']) === selectedFilter.value;
                 if (selectedFilter.type === 'currency') return pos['@currency'] === selectedFilter.value;
+                if (selectedFilter.type === 'country') return (pos['@issuerCountryCode'] || 'N/A').trim() === selectedFilter.value;
                 if (selectedFilter.type === 'symbol') {
                     // If the selected filter is "Others", we need to know what constitutes "Others".
                     // In App.jsx this logic depended on the full list to determine the threshold.
@@ -69,6 +73,8 @@ const OpenPositions = ({
                 }
                 return true;
             });
+        } else {
+            console.log('OpenPositions - No filter applied, showing all positions');
         }
 
         if (!sortConfig.key && !isGrouped) return result;
@@ -105,9 +111,8 @@ const OpenPositions = ({
             }
             return 0;
         });
-    };
+    }, [positions, searchQuery, selectedFilter, sortConfig, isGrouped]);
 
-    const sortedPositions = getSortedPositions(positions);
     const totalPages = Math.ceil(sortedPositions.length / rowsPerPage);
     const startIndex = (currentPage - 1) * rowsPerPage;
     const paginatedPositions = sortedPositions.slice(startIndex, startIndex + rowsPerPage);
@@ -177,6 +182,14 @@ const OpenPositions = ({
                                         )}
                                     </div>
                                 </th>
+                                <th onClick={() => requestSort('@issuerCountryCode')} className="sortable">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        {t('country')}
+                                        {sortConfig.key === '@issuerCountryCode' && (
+                                            sortConfig.direction === 'ascending' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                                        )}
+                                    </div>
+                                </th>
                                 <th onClick={() => requestSort('@openPrice')} className="sortable">
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                         {t('avg_price')}
@@ -228,89 +241,87 @@ const OpenPositions = ({
                             </tr>
                         </thead>
                         <tbody>
-                            <AnimatePresence>
-                                {paginatedPositions.length > 0 ? (
-                                    paginatedPositions.map((pos, idx) => {
-                                        const showHeader = isGrouped && (idx === 0 || getAssetLabel(pos['@assetCategory']) !== getAssetLabel(paginatedPositions[idx - 1]['@assetCategory']));
-                                        return (
-                                            <React.Fragment key={`${pos['@symbol']}-${idx}`}>
-                                                {showHeader && (
-                                                    <tr className="group-header-row">
-                                                        <td colSpan={10} style={{ padding: '0.8rem 1rem', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--accent-primary)', fontWeight: 700, fontSize: '0.9rem' }}>
-                                                            {getAssetLabel(pos['@assetCategory'])}
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                                <motion.tr
-                                                    initial={{ opacity: 0, y: 10 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0, y: -10 }}
-                                                    transition={{ delay: idx * 0.03 }}
-                                                    whileHover={{ backgroundColor: 'rgba(255,255,255,0.02)' }}
-                                                >
-                                                    <td style={{ fontWeight: 600 }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                            <div
-                                                                className="ticker-logo-container"
-                                                                style={{ cursor: 'pointer' }}
-                                                                onClick={() => onPositionClick && onPositionClick(pos)}
-                                                            >
-                                                                <img
-                                                                    src={`https://img.logo.dev/ticker/${(pos['@symbol'] || '').split(' ')[0].toLowerCase()}?token=${import.meta.env.VITE_LOGO_DEV_TOKEN}`}
-                                                                    alt={pos['@symbol']}
-                                                                    className="ticker-logo"
-                                                                    onError={(e) => {
-                                                                        e.target.style.display = 'none';
-                                                                        e.target.parentElement.classList.add('fallback');
-                                                                    }}
-                                                                />
-                                                                <span className="ticker-fallback-icon">{pos['@symbol']?.[0]}</span>
-                                                            </div>
-                                                            {pos['@symbol']}
-                                                        </div>
+                            {paginatedPositions.length > 0 ? (
+                                paginatedPositions.map((pos, idx) => {
+                                    const showHeader = isGrouped && (idx === 0 || getAssetLabel(pos['@assetCategory']) !== getAssetLabel(paginatedPositions[idx - 1]['@assetCategory']));
+                                    return (
+                                        <React.Fragment key={`${pos['@symbol']}-${idx}`}>
+                                            {showHeader && (
+                                                <tr className="group-header-row">
+                                                    <td colSpan={11} style={{ padding: '0.8rem 1rem', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--accent-primary)', fontWeight: 700, fontSize: '0.9rem' }}>
+                                                        {getAssetLabel(pos['@assetCategory'])}
                                                     </td>
-                                                    <td style={{ color: 'var(--text-dim)' }}>{getAssetLabel(pos['@assetCategory'], true)}</td>
-                                                    <td>{parseFloat(pos['@position']).toLocaleString()}</td>
-                                                    <td style={{ color: 'var(--text-dim)' }}>{pos['@currency']}</td>
-                                                    <td>{formatCurrency(pos['@openPrice'] || 0)}</td>
-                                                    <td>{formatCurrency(pos['@markPrice'] || 0)}</td>
-                                                    <td style={{ fontWeight: 600 }}>{formatCurrency(pos['@positionValue'] || 0)}</td>
-                                                    <td>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                </tr>
+                                            )}
+                                            <motion.tr
+                                                initial={false}
+                                                animate={{ opacity: 1 }}
+                                                transition={{ duration: 0.15 }}
+                                                whileHover={{ backgroundColor: 'rgba(255,255,255,0.02)' }}
+                                            >
+                                                <td style={{ fontWeight: 600 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                        <div
+                                                            className="ticker-logo-container"
+                                                            style={{ cursor: 'pointer' }}
+                                                            onClick={() => onPositionClick && onPositionClick(pos)}
+                                                        >
+                                                            <img
+                                                                src={`https://img.logo.dev/ticker/${(pos['@symbol'] || '').split(' ')[0].toLowerCase()}?token=${import.meta.env.VITE_LOGO_DEV_TOKEN}`}
+                                                                alt={pos['@symbol']}
+                                                                className="ticker-logo"
+                                                                onError={(e) => {
+                                                                    e.target.style.display = 'none';
+                                                                    e.target.parentElement.classList.add('fallback');
+                                                                }}
+                                                            />
+                                                            <span className="ticker-fallback-icon">{pos['@symbol']?.[0]}</span>
+                                                        </div>
+                                                        {pos['@symbol']}
+                                                    </div>
+                                                </td>
+                                                <td style={{ color: 'var(--text-dim)' }}>{getAssetLabel(pos['@assetCategory'], true)}</td>
+                                                <td>{parseFloat(pos['@position']).toLocaleString()}</td>
+                                                <td style={{ color: 'var(--text-dim)' }}>{pos['@currency']}</td>
+                                                <td style={{ color: 'var(--text-dim)' }}>{pos['@issuerCountryCode'] || '-'}</td>
+                                                <td>{formatCurrency(pos['@openPrice'] || 0)}</td>
+                                                <td>{formatCurrency(pos['@markPrice'] || 0)}</td>
+                                                <td style={{ fontWeight: 600 }}>{formatCurrency(pos['@positionValue'] || 0)}</td>
+                                                <td>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <div style={{
+                                                            width: '60px',
+                                                            height: '4px',
+                                                            background: 'rgba(255,255,255,0.1)',
+                                                            borderRadius: '2px',
+                                                            overflow: 'hidden'
+                                                        }}>
                                                             <div style={{
-                                                                width: '60px',
-                                                                height: '4px',
-                                                                background: 'rgba(255,255,255,0.1)',
-                                                                borderRadius: '2px',
-                                                                overflow: 'hidden'
-                                                            }}>
-                                                                <div style={{
-                                                                    width: `${Math.min(100, Math.abs(parseFloat(pos['@percentOfNAV']) || 0))}%`,
-                                                                    height: '100%',
-                                                                    background: 'var(--accent-primary)'
-                                                                }} />
-                                                            </div>
-                                                            {parseFloat(pos['@percentOfNAV'] || 0).toFixed(2)}%
+                                                                width: `${Math.min(100, Math.abs(parseFloat(pos['@percentOfNAV']) || 0))}%`,
+                                                                height: '100%',
+                                                                background: 'var(--accent-primary)'
+                                                            }} />
                                                         </div>
-                                                    </td>
-                                                    <td className={(parseFloat(pos['@fifoPnlUnrealized']) || 0) >= 0 ? 'positive' : 'negative'}>
-                                                        {formatCurrency(pos['@fifoPnlUnrealized'] || 0)}
-                                                    </td>
-                                                    <td className={(parseFloat(pos['realized_pnl']) || 0) >= 0 ? 'positive' : 'negative'}>
-                                                        {formatCurrency(pos['realized_pnl'] || 0)}
-                                                    </td>
-                                                </motion.tr>
-                                            </React.Fragment>
-                                        );
-                                    })
-                                ) : (
-                                    <tr>
-                                        <td colSpan="10" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-dim)' }}>
-                                            {t('no_positions')}
-                                        </td>
-                                    </tr>
-                                )}
-                            </AnimatePresence>
+                                                        {parseFloat(pos['@percentOfNAV'] || 0).toFixed(2)}%
+                                                    </div>
+                                                </td>
+                                                <td className={(parseFloat(pos['@fifoPnlUnrealized']) || 0) >= 0 ? 'positive' : 'negative'}>
+                                                    {formatCurrency(pos['@fifoPnlUnrealized'] || 0)}
+                                                </td>
+                                                <td className={(parseFloat(pos['realized_pnl']) || 0) >= 0 ? 'positive' : 'negative'}>
+                                                    {formatCurrency(pos['realized_pnl'] || 0)}
+                                                </td>
+                                            </motion.tr>
+                                        </React.Fragment>
+                                    );
+                                })
+                            ) : (
+                                <tr>
+                                    <td colSpan="11" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-dim)' }}>
+                                        {t('no_positions')}
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
