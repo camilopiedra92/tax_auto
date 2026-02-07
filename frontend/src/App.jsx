@@ -7,6 +7,8 @@ import Settings from './components/Settings';
 import { PieChart as RPieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip, Sector } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 import Login from './components/Login';
+import TradesList from './components/TradesList';
+import OpenPositions from './components/OpenPositions';
 import { LogOut } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
@@ -41,18 +43,23 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [sortConfig, setSortConfig] = useState({ key: '@percentOfNAV', direction: 'descending' });
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [activeIndex, setActiveIndex] = useState(null);
   const [focusedIndex, setFocusedIndex] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const labelsGeometryRef = React.useRef({});
   const chartContainerRef = useRef(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isGrouped, setIsGrouped] = useState(false);
+  const [activeTab, setActiveTab] = useState('positions');
   const [distributionMode, setDistributionMode] = useState('symbol'); // 'category', 'currency', 'symbol'
   const [selectedFilter, setSelectedFilter] = useState(null);
+  const [globalSearch, setGlobalSearch] = useState('');
+
+  // Sync global search with chart selection
+  useEffect(() => {
+    if (selectedFilter?.type === 'symbol' && selectedFilter.value) {
+      setGlobalSearch(selectedFilter.value);
+    }
+  }, [selectedFilter]);
+
   const [user, setUser] = useState(() => localStorage.getItem('ibkr_user_id'));
   const [token, setToken] = useState(() => localStorage.getItem('ibkr_token'));
   const [theme, setTheme] = useState('dark');
@@ -105,10 +112,11 @@ function App() {
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (chartContainerRef.current && !chartContainerRef.current.contains(event.target)) {
-        // Checking if click is not on a table logo or other interactive elements that should set focus
-        if (!event.target.closest('.ticker-logo-container')) {
+        // Checking if click is not on a table logo, tabs/search, or other interactive elements
+        if (!event.target.closest('.ticker-logo-container') && !event.target.closest('.dashboard-controls')) {
           setFocusedIndex(null);
           setSelectedFilter(null);
+          setGlobalSearch('');
         }
       }
     };
@@ -221,11 +229,6 @@ function App() {
     }
   }, [user, token]);
 
-  // Reset to first page when sorting or rows per page change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [sortConfig, rowsPerPage]);
-
   const openPositions = data?.OpenPositions || [];
 
   // Use summary if available, otherwise fallback (though summary should always be there if data is there)
@@ -233,84 +236,18 @@ function App() {
   const estimatedCash = summary ? summary.estimated_cash : 0;
   const totalPnL = summary ? summary.total_unrealized_pnl : 0;
 
-  const requestSort = (key) => {
-    let direction = 'ascending';
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
+  const handlePositionClick = (pos) => {
+    // Sync with chart focus
+    setDistributionMode('symbol');
+    const symbol = (pos['@symbol'] || '').split(' ')[0];
+    const index = chartData.findIndex(d => d.name.startsWith(symbol));
+    if (index !== -1) {
+      setFocusedIndex(index);
+      setSelectedFilter({ type: 'symbol', value: chartData[index].name });
+      // Scroll to chart
+      chartContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    setSortConfig({ key, direction });
   };
-
-  const getSortedPositions = (positions) => {
-    // Filter first
-    let result = positions;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(pos =>
-        (pos['@symbol'] || '').toLowerCase().includes(q) ||
-        (pos['@description'] || '').toLowerCase().includes(q)
-      );
-    }
-
-    if (selectedFilter) {
-      result = result.filter(pos => {
-        if (selectedFilter.type === 'category') return getAssetLabel(pos['@assetCategory']) === selectedFilter.value;
-        if (selectedFilter.type === 'currency') return pos['@currency'] === selectedFilter.value;
-        if (selectedFilter.type === 'symbol') {
-          if (selectedFilter.value === t('others')) {
-            // Find what "Others" includes based on the same threshold used in chartData
-            const otherSymbols = openPositions
-              .filter(p => (Math.abs(parseFloat(p['@percentOfNAV'])) || 0) < 3)
-              .map(p => p['@symbol']);
-            return otherSymbols.includes(pos['@symbol']);
-          }
-          return pos['@symbol'] === selectedFilter.value;
-        }
-        return true;
-      });
-    }
-
-    if (!sortConfig.key && !isGrouped) return result;
-
-    return [...result].sort((a, b) => {
-      // Primary sort if grouped: Asset Category
-      if (isGrouped) {
-        const catA = getAssetLabel(a['@assetCategory']);
-        const catB = getAssetLabel(b['@assetCategory']);
-        const catCompare = catA.localeCompare(catB);
-        if (catCompare !== 0) return catCompare;
-      }
-
-      // Secondary (or primary if not grouped) sort: User selection
-      if (!sortConfig.key) return 0;
-
-      let aValue = a[sortConfig.key];
-      let bValue = b[sortConfig.key];
-
-      // Convert to number if possible
-      const aNum = parseFloat(aValue);
-      const bNum = parseFloat(bValue);
-
-      if (!isNaN(aNum) && !isNaN(bNum)) {
-        aValue = aNum;
-        bValue = bNum;
-      }
-
-      if (aValue < bValue) {
-        return sortConfig.direction === 'ascending' ? -1 : 1;
-      }
-      if (aValue > bValue) {
-        return sortConfig.direction === 'ascending' ? 1 : -1;
-      }
-      return 0;
-    });
-  };
-
-  const sortedPositions = getSortedPositions(openPositions);
-
-  const totalPages = Math.ceil(sortedPositions.length / rowsPerPage);
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const paginatedPositions = sortedPositions.slice(startIndex, startIndex + rowsPerPage);
 
   const chartData = React.useMemo(() => {
     if (!openPositions.length) return [];
@@ -982,15 +919,65 @@ function App() {
           </div>
         </div>
 
-        <div className="glass-card" style={{ overflow: 'hidden' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>{t('open_positions')}</h2>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="dashboard-controls" style={{ display: 'flex', borderBottom: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', flex: 1 }}>
+              <button
+                onClick={() => setActiveTab('positions')}
+                style={{
+                  flex: 1,
+                  padding: '1rem',
+                  background: activeTab === 'positions' ? 'rgba(255,255,255,0.05)' : 'transparent',
+                  border: 'none',
+                  borderBottom: activeTab === 'positions' ? '2px solid var(--accent-primary)' : '1px solid transparent',
+                  color: activeTab === 'positions' ? 'var(--text-main)' : 'var(--text-dim)',
+                  fontWeight: activeTab === 'positions' ? 700 : 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  fontSize: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <Briefcase size={18} />
+                {t('open_positions')}
+              </button>
+              <button
+                onClick={() => setActiveTab('trades')}
+                style={{
+                  flex: 1,
+                  padding: '1rem',
+                  background: activeTab === 'trades' ? 'rgba(255,255,255,0.05)' : 'transparent',
+                  border: 'none',
+                  borderBottom: activeTab === 'trades' ? '2px solid var(--accent-primary)' : '1px solid transparent',
+                  color: activeTab === 'trades' ? 'var(--text-main)' : 'var(--text-dim)',
+                  fontWeight: activeTab === 'trades' ? 700 : 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  fontSize: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <List size={18} />
+                {t('trades_history')}
+              </button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', padding: '0 1rem', borderLeft: '1px solid var(--glass-border)', gap: '1rem' }}>
               {selectedFilter && (
                 <motion.button
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  onClick={() => setSelectedFilter(null)}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  onClick={() => {
+                    setSelectedFilter(null);
+                    setGlobalSearch('');
+                    setFocusedIndex(null);
+                  }}
                   style={{
                     background: 'rgba(239, 68, 68, 0.1)',
                     border: '1px solid rgba(239, 68, 68, 0.2)',
@@ -1002,7 +989,8 @@ function App() {
                     fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.4rem'
+                    gap: '0.4rem',
+                    whiteSpace: 'nowrap'
                   }}
                 >
                   {t('clear_filter')} ({selectedFilter.value})
@@ -1012,258 +1000,65 @@ function App() {
                 <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', zIndex: 2 }} />
                 <input
                   type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t('search_positions')}
+                  value={globalSearch}
+                  onChange={(e) => {
+                    setGlobalSearch(e.target.value);
+                    if (selectedFilter?.type === 'symbol') {
+                      setSelectedFilter(null);
+                    }
+                  }}
+                  placeholder={t('search_symbol')}
                   className="glass-input"
-                  style={{ padding: '0.5rem 0.5rem 0.5rem 2.5rem !important', fontSize: '0.9rem !important', height: '36px' }}
+                  style={{ padding: '0.5rem 0.5rem 0.5rem 2.5rem', fontSize: '0.9rem', height: '36px' }}
                 />
               </div>
-              <button
-                onClick={() => setIsGrouped(!isGrouped)}
-                style={{
-                  background: isGrouped ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid',
-                  borderColor: isGrouped ? 'var(--accent-primary)' : 'var(--glass-border)',
-                  color: isGrouped ? 'var(--accent-primary)' : 'var(--text-dim)',
-                  padding: '0.4rem 0.8rem',
-                  borderRadius: '0.5rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  fontSize: '0.85rem',
-                  transition: 'all 0.2s ease',
-                  height: '36px'
-                }}
-              >
-                {isGrouped ? <Layers size={16} /> : <List size={16} />}
-                {t('group_by_type')}
-              </button>
             </div>
           </div>
-          <div style={{ overflowX: 'auto', margin: '0 -1.75rem' }}>
-            <div style={{ padding: '0 1.75rem' }}>
-              <table style={{ minWidth: '1000px' }}>
-                <thead>
-                  <tr>
-                    <th onClick={() => requestSort('@symbol')} className="sortable">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {t('symbol')}
-                        {sortConfig.key === '@symbol' && (
-                          sortConfig.direction === 'ascending' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('@assetCategory')} className="sortable">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {t('type')}
-                        {sortConfig.key === '@assetCategory' && (
-                          sortConfig.direction === 'ascending' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('@position')} className="sortable">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {t('quantity')}
-                        {sortConfig.key === '@position' && (
-                          sortConfig.direction === 'ascending' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('@currency')} className="sortable">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {t('currency')}
-                        {sortConfig.key === '@currency' && (
-                          sortConfig.direction === 'ascending' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('@openPrice')} className="sortable">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {t('avg_price')}
-                        {sortConfig.key === '@openPrice' && (
-                          sortConfig.direction === 'ascending' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('@markPrice')} className="sortable">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {t('current_price')}
-                        {sortConfig.key === '@markPrice' && (
-                          sortConfig.direction === 'ascending' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('@positionValue')} className="sortable">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {t('value')}
-                        {sortConfig.key === '@positionValue' && (
-                          sortConfig.direction === 'ascending' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('@percentOfNAV')} className="sortable">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {t('nav_percent')}
-                        {sortConfig.key === '@percentOfNAV' && (
-                          sortConfig.direction === 'ascending' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('@fifoPnlUnrealized')} className="sortable">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {t('pnl_unrealized_short')}
-                        {sortConfig.key === '@fifoPnlUnrealized' && (
-                          sortConfig.direction === 'ascending' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th onClick={() => requestSort('realized_pnl')} className="sortable">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {t('pnl_realized_short')}
-                        {sortConfig.key === 'realized_pnl' && (
-                          sortConfig.direction === 'ascending' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <AnimatePresence mode="wait">
-                    {paginatedPositions.length > 0 ? (
-                      paginatedPositions.map((pos, idx) => {
-                        const showHeader = isGrouped && (idx === 0 || getAssetLabel(pos['@assetCategory']) !== getAssetLabel(paginatedPositions[idx - 1]['@assetCategory']));
-                        return (
-                          <React.Fragment key={`${pos['@symbol']}-${idx}`}>
-                            {showHeader && (
-                              <tr className="group-header-row">
-                                <td colSpan={10} style={{ padding: '0.8rem 1rem', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--accent-primary)', fontWeight: 700, fontSize: '0.9rem' }}>
-                                  {getAssetLabel(pos['@assetCategory'])}
-                                </td>
-                              </tr>
-                            )}
-                            <motion.tr
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -10 }}
-                              transition={{ delay: idx * 0.03 }}
-                              whileHover={{ backgroundColor: 'rgba(255,255,255,0.02)' }}
-                            >
-                              <td style={{ fontWeight: 600 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                  <div
-                                    className="ticker-logo-container"
-                                    style={{ cursor: 'pointer' }}
-                                    onClick={() => {
-                                      // Sync with chart focus
-                                      setDistributionMode('symbol');
-                                      const symbol = (pos['@symbol'] || '').split(' ')[0];
-                                      const index = chartData.findIndex(d => d.name.startsWith(symbol));
-                                      if (index !== -1) {
-                                        setFocusedIndex(index);
-                                        setSelectedFilter({ type: 'symbol', value: chartData[index].name });
-                                        // Scroll to chart
-                                        chartContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                      }
-                                    }}
-                                  >
-                                    <img
-                                      src={`https://img.logo.dev/ticker/${(pos['@symbol'] || '').split(' ')[0].toLowerCase()}?token=${import.meta.env.VITE_LOGO_DEV_TOKEN}`}
-                                      alt={pos['@symbol']}
-                                      className="ticker-logo"
-                                      onError={(e) => {
-                                        e.target.style.display = 'none';
-                                        e.target.parentElement.classList.add('fallback');
-                                      }}
-                                    />
-                                    <span className="ticker-fallback-icon">{pos['@symbol']?.[0]}</span>
-                                  </div>
-                                  {pos['@symbol']}
-                                </div>
-                              </td>
-                              <td style={{ color: 'var(--text-dim)' }}>{getAssetLabel(pos['@assetCategory'], true)}</td>
-                              <td>{parseFloat(pos['@position']).toLocaleString()}</td>
-                              <td style={{ color: 'var(--text-dim)' }}>{pos['@currency']}</td>
-                              <td>{formatCurrency(pos['@openPrice'] || 0)}</td>
-                              <td>{formatCurrency(pos['@markPrice'] || 0)}</td>
-                              <td style={{ fontWeight: 600 }}>{formatCurrency(pos['@positionValue'] || 0)}</td>
-                              <td>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                  <div style={{
-                                    width: '60px',
-                                    height: '4px',
-                                    background: 'rgba(255,255,255,0.1)',
-                                    borderRadius: '2px',
-                                    overflow: 'hidden'
-                                  }}>
-                                    <div style={{
-                                      width: `${Math.min(100, Math.abs(parseFloat(pos['@percentOfNAV']) || 0))}%`,
-                                      height: '100%',
-                                      background: 'var(--accent-primary)'
-                                    }} />
-                                  </div>
-                                  {parseFloat(pos['@percentOfNAV'] || 0).toFixed(2)}%
-                                </div>
-                              </td>
-                              <td className={(parseFloat(pos['@fifoPnlUnrealized']) || 0) >= 0 ? 'positive' : 'negative'}>
-                                {formatCurrency(pos['@fifoPnlUnrealized'] || 0)}
-                              </td>
-                              <td className={(parseFloat(pos['realized_pnl']) || 0) >= 0 ? 'positive' : 'negative'}>
-                                {formatCurrency(pos['realized_pnl'] || 0)}
-                              </td>
-                            </motion.tr>
-                          </React.Fragment>
-                        );
-                      })
-                    ) : (
-                      <tr>
-                        <td colSpan="10" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-dim)' }}>
-                          {t('no_positions')}
-                        </td>
-                      </tr>
-                    )}
-                  </AnimatePresence>
-                </tbody>
-              </table>
-            </div>
+
+          <div style={{ padding: '1.5rem' }}>
+            <AnimatePresence mode="wait">
+              {activeTab === 'positions' ? (
+                <motion.div
+                  key="positions"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <OpenPositions
+                    positions={openPositions}
+                    selectedFilter={selectedFilter}
+                    searchQuery={globalSearch}
+                    onPositionClick={handlePositionClick}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="trades"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {data?.Trades ? (
+                    <TradesList
+                      trades={data.Trades}
+                      distributionMode={distributionMode}
+                      selectedFilter={selectedFilter}
+                      searchQuery={globalSearch}
+                    />
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-dim)' }}>
+                      {t('no_data_available')}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-          <div className="pagination-container">
-            <span className="pagination-info">
-              {t('showing_rows')} {startIndex + 1}-{Math.min(startIndex + rowsPerPage, sortedPositions.length)} {t('of')} {sortedPositions.length}
-            </span>
-            <div className="pagination-controls">
-              <div className="rows-selector">
-                <span>{t('rows_per_page')}</span>
-                <select
-                  value={rowsPerPage}
-                  onChange={(e) => setRowsPerPage(Number(e.target.value))}
-                  className="glass-select"
-                >
-                  {[5, 10, 20, 50, 100].map(val => (
-                    <option key={val} value={val}>{val}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="page-navigation">
-                <button
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage(c => Math.max(1, c - 1))}
-                  className="nav-button"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <button
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage(c => Math.min(totalPages, c + 1))}
-                  className="nav-button"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          </div>
+
         </div>
+
       </div>
     </div>
   );

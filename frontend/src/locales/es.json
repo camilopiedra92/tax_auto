@@ -130,5 +130,18 @@
         "BOND": "Bono",
         "FUND": "Fondo",
         "Other": "Otro"
-    }
+    },
+    "trades_history": "Historial de Operaciones",
+    "date": "Fecha",
+    "side": "Lado",
+    "price": "Precio",
+    "amount": "Monto",
+    "comm": "Comisión",
+    "realized_pl": "PnL Realizado",
+    "no_trades_found": "No se encontraron operaciones con esos criterios.",
+    "showing_range": "Mostrando {{start}}-{{end}} de {{total}}",
+    "buy": "Compra",
+    "sell": "Venta",
+    "all": "Todos",
+    "search_symbol": "Buscar símbolo..."
 }

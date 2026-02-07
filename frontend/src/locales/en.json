@@ -130,5 +130,18 @@
         "BOND": "Bond",
         "FUND": "Fund",
         "Other": "Others"
-    }
+    },
+    "trades_history": "Trades History",
+    "date": "Date",
+    "side": "Side",
+    "price": "Price",
+    "amount": "Amount",
+    "comm": "Comm",
+    "realized_pl": "Realized PnL",
+    "no_trades_found": "No trades found matching your criteria.",
+    "showing_range": "Showing {{start}}-{{end}} of {{total}}",
+    "buy": "Buy",
+    "sell": "Sell",
+    "all": "All",
+    "search_symbol": "Search symbol..."
 }
