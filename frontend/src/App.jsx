@@ -794,7 +794,7 @@ function App() {
 
       <div className="main-content">
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>{t('distribution')}</h2>
               <div style={{ display: 'flex', gap: '0.4rem', background: 'rgba(255,255,255,0.03)', padding: '0.25rem', borderRadius: '0.75rem', border: '1px solid var(--glass-border)' }}>
@@ -817,9 +817,9 @@ function App() {
 
           <div className="distribution-content-wrapper">
             <div className="distribution-chart-section" ref={chartContainerRef}>
-              <div style={{ minHeight: '600px', width: '100%', position: 'relative', display: 'flex', justifyContent: 'center' }}>
-                <ResponsiveContainer width="100%" height={600}>
-                  <RPieChart margin={{ top: 20, right: 180, bottom: 20, left: 180 }}>
+              <div style={{ minHeight: '450px', width: '100%', position: 'relative', display: 'flex', justifyContent: 'center' }}>
+                <ResponsiveContainer width="100%" height={450}>
+                  <RPieChart margin={{ top: 10, right: 180, bottom: 10, left: 180 }}>
                     <defs>
                       <filter id="labelBlur" x="-20%" y="-20%" width="140%" height="140%">
                         <feGaussianBlur stdDeviation="1.5" />
@@ -832,8 +832,8 @@ function App() {
                       data={chartData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={100}
-                      outerRadius={140}
+                      innerRadius={110}
+                      outerRadius={150}
                       paddingAngle={chartData.length > 1 ? 4 : 0}
                       dataKey="value"
                       label={renderCustomizedLabel}
