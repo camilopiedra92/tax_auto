@@ -52,6 +52,7 @@ function App() {
   const [distributionMode, setDistributionMode] = useState('symbol'); // 'category', 'currency', 'symbol', 'country'
   const [selectedFilter, setSelectedFilter] = useState(null);
   const [globalSearch, setGlobalSearch] = useState('');
+  const [lastManualSync, setLastManualSync] = useState(null);
 
   // Sync global search with chart selection
   useEffect(() => {
@@ -146,17 +147,28 @@ function App() {
   const formatIBKRDate = (timestamp) => {
     if (!timestamp) return t('not_available');
     try {
-      // IBKR format: YYYYMMDD;HHMMSS
-      if (timestamp.includes(';')) {
-        const [datePart, timePart] = timestamp.split(';');
+      const timestampStr = String(timestamp);
+
+      // IBKR format can be either:
+      // 1. YYYYMMDD (report date)
+      // 2. YYYYMMDD;HHMMSS (when generated timestamp)
+      if (timestampStr.includes(';')) {
+        // Format with time: YYYYMMDD;HHMMSS
+        const [datePart, timePart] = timestampStr.split(';');
         const year = datePart.substring(0, 4);
         const month = datePart.substring(4, 6);
         const day = datePart.substring(6, 8);
         const hour = timePart.substring(0, 2);
         const minute = timePart.substring(2, 4);
         return `${day}/${month}/${year} ${hour}:${minute}`;
+      } else if (timestampStr.length === 8 && /^\d{8}$/.test(timestampStr)) {
+        // Format without time: YYYYMMDD
+        const year = timestampStr.substring(0, 4);
+        const month = timestampStr.substring(4, 6);
+        const day = timestampStr.substring(6, 8);
+        return `${day}/${month}/${year}`;
       }
-      return timestamp;
+      return timestampStr;
     } catch (e) {
       return String(timestamp);
     }
@@ -205,6 +217,24 @@ function App() {
     return t(key, { defaultValue: normalized });
   }, [t]);
 
+  const handleManualSync = async () => {
+    // Check cooldown (5 minutes)
+    const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+    const now = new Date();
+
+    if (lastManualSync) {
+      const timeSinceLastSync = now - new Date(lastManualSync);
+      if (timeSinceLastSync < COOLDOWN_MS) {
+        const remainingMinutes = Math.ceil((COOLDOWN_MS - timeSinceLastSync) / 60000);
+        setError(t('sync_cooldown', { minutes: remainingMinutes, defaultValue: `Please wait ${remainingMinutes} minute(s) before syncing again.` }));
+        return;
+      }
+    }
+
+    setLastManualSync(now.toISOString());
+    await fetchData(true);
+  };
+
   const fetchData = async (isSync = false) => {
     setLoading(true);
     setError(null);
@@ -237,11 +267,58 @@ function App() {
     }
   };
 
+  // Auto-sync on load if we haven't synced today
   useEffect(() => {
-    if (user && token) {
-      fetchData();
-    }
+    const checkAndAutoSync = async () => {
+      if (!user || !token) return;
+
+      try {
+        // First, fetch latest data to check lastSync date
+        const config = { headers: { 'Authorization': `Bearer ${token}` } };
+        const response = await axios.get(`${API_BASE}/latest`, config);
+
+        if (response.data.status === 'success') {
+          const lastSyncDate = response.data.last_sync;
+
+          // Check if we need to sync
+          const needsSync = !lastSyncDate || !isSameDay(new Date(lastSyncDate), new Date());
+
+          if (needsSync) {
+            // Auto-sync if no data today
+            console.log('Auto-syncing: No data from today');
+            await fetchData(true);
+          } else {
+            // Just load the existing data
+            setData(response.data.data);
+            setSummary(response.data.summary);
+            setLastReportGenerated(response.data.last_report_generated);
+            setLastSync(response.data.last_sync);
+          }
+        } else if (response.data.message?.includes('No report found')) {
+          // No report exists at all, try to sync
+          console.log('Auto-syncing: No report found');
+          await fetchData(true);
+        }
+      } catch (err) {
+        if (err.response?.status === 401) {
+          handleLogout();
+          return;
+        }
+        // If there's an error fetching, just try to sync
+        console.log('Auto-syncing: Error fetching latest data');
+        await fetchData(true);
+      }
+    };
+
+    checkAndAutoSync();
   }, [user, token]);
+
+  // Helper function to check if two dates are the same day
+  const isSameDay = (date1, date2) => {
+    return date1.getFullYear() === date2.getFullYear() &&
+      date1.getMonth() === date2.getMonth() &&
+      date1.getDate() === date2.getDate();
+  };
 
   const openPositions = data?.OpenPositions || [];
 
@@ -629,7 +706,7 @@ function App() {
           </div>
           <button
             className={`sync-button ${loading ? 'loading' : ''}`}
-            onClick={() => fetchData(true)}
+            onClick={handleManualSync}
             disabled={loading}
           >
             <RefreshCw size={18} />

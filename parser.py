@@ -57,18 +57,21 @@ def parse_ibkr_xml(xml_content):
                     if items:
                         collected_data[section].append(pd.DataFrame(items))
     
-    # Extract metadata (e.g. whenGenerated)
+    # Extract metadata - use @reportDate (the date the data corresponds to)
+    # instead of @whenGenerated (when the report was created)
     last_update = None
     if statements:
-        # Try to find the first statement that has @whenGenerated
+        # Try to find @reportDate from the first statement
         for s in statements:
-            last_update = s.get('@whenGenerated')
+            # @reportDate is typically in the statement attributes
+            last_update = s.get('@toDate') or s.get('@reportDate')
             if last_update:
                 break
     
-    # Check at the root level if not found in statements
+    # Fallback: check at the root level
     if not last_update:
-        last_update = data_dict.get("FlexQueryResponse", {}).get("@whenGenerated")
+        flex_response = data_dict.get("FlexQueryResponse", {})
+        last_update = flex_response.get("@toDate") or flex_response.get("@reportDate")
 
     results = {}
     for section, df_list in collected_data.items():
